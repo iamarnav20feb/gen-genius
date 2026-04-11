@@ -1,0 +1,1928 @@
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { 
+  Send, 
+  BookOpen, 
+  GraduationCap,
+  History, 
+  Globe, 
+  Scale, 
+  TrendingUp, 
+  FlaskConical, 
+  Calculator, 
+  Plus,
+  MessageSquare,
+  FileText,
+  HelpCircle,
+  Menu,
+  ChevronRight,
+  User,
+  Bot,
+  Sun,
+  Moon,
+  Trash2,
+  Edit2,
+  Check,
+  X,
+  MoreVertical,
+  Settings,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  LogIn,
+  RefreshCw,
+  Download,
+  Upload,
+  FileDown,
+  Paperclip,
+  Image as ImageIcon,
+  Video,
+  Square,
+  Loader2,
+  FileText as FileIcon,
+  Library,
+  Compass,
+  Coins,
+  Atom,
+  Sigma,
+  Puzzle,
+  BrainCircuit,
+  Mic,
+  Volume2,
+  VolumeX,
+  StopCircle,
+  Laptop,
+  Newspaper,
+  ChevronDown,
+  Sparkles,
+  Languages,
+  MicOff,
+  Waves,
+  Power
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { getExamHelpStream } from "./services/geminiService";
+import { auth, signInWithGoogle, logOut } from "./lib/firebase";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { cn } from "@/lib/utils";
+
+// Lazy load heavy components
+const ReactMarkdown = lazy(() => import("react-markdown"));
+import rehypeRaw from "rehype-raw";
+const SettingsDialog = lazy(() => import("./components/SettingsDialog"));
+const RecycleBinDialog = lazy(() => import("./components/RecycleBinDialog"));
+const ConfirmationDialog = lazy(() => import("./components/ConfirmationDialog"));
+const TypingText = lazy(() => import("./components/TypingText"));
+
+interface FileAttachment {
+  name: string;
+  type: string;
+  data: string; // base64
+  preview?: string;
+}
+
+interface Message {
+  id: string;
+  role: "user" | "model";
+  content: string;
+  timestamp: Date;
+  isTyping?: boolean;
+  relatedTopics?: string[];
+  attachments?: FileAttachment[];
+  status?: "sending" | "sent" | "error";
+}
+
+interface Chat {
+  id: string;
+  title: string;
+  subject?: string;
+  messages: Message[];
+  createdAt: Date;
+  deletedAt?: number;
+}
+
+const SUBJECTS = [
+  { name: "Polity", icon: Scale, color: "text-blue-500", bg: "bg-blue-50" },
+  { name: "History", icon: Library, color: "text-amber-500", bg: "bg-amber-50" },
+  { name: "Geography", icon: Compass, color: "text-emerald-500", bg: "bg-emerald-50" },
+  { name: "Economy", icon: Coins, color: "text-purple-500", bg: "bg-purple-50" },
+  { name: "Science", icon: Atom, color: "text-cyan-500", bg: "bg-cyan-50" },
+  { name: "Math", icon: Sigma, color: "text-rose-500", bg: "bg-rose-50" },
+  { name: "Reasoning", icon: Puzzle, color: "text-indigo-500", bg: "bg-indigo-50" },
+  { name: "Computer", icon: Laptop, color: "text-slate-500", bg: "bg-slate-50" },
+  { name: "Current Affairs", icon: Newspaper, color: "text-orange-500", bg: "bg-orange-50" },
+];
+
+const QUICK_ACTIONS = [
+  { name: "MCQs", prompt: "Generate 5 MCQs on ", icon: HelpCircle },
+  { name: "Notes", prompt: "Give structured revision notes on ", icon: FileText },
+  { name: "Latest News", prompt: "What are the most important current affairs for exams from the last 24 hours?", icon: Newspaper },
+  { name: "Quiz", prompt: "Start a quiz on ", icon: BrainCircuit },
+];
+
+interface UserProfile {
+  name: string;
+  bio: string;
+}
+
+const GeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
+  <div className={cn("flex items-center gap-3", collapsed && "flex-col gap-2")}>
+    <div className="relative">
+      <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-lg animate-pulse" />
+      <div className={cn(
+        "relative bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-xl border-2 border-white/10 overflow-hidden",
+        collapsed ? "w-10 h-10" : "w-12 h-12"
+      )}>
+        <Bot className={cn("text-white", collapsed ? "w-5 h-5" : "w-7 h-7")} />
+        <motion.div 
+          animate={{ opacity: [0.3, 0.6, 0.3] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          className="absolute top-1 right-1 w-2 h-2 bg-secondary rounded-full"
+        />
+      </div>
+    </div>
+    {!collapsed && (
+      <div className="flex flex-col">
+        <span className="text-[10px] font-black tracking-[0.3em] leading-none text-muted-foreground uppercase">Generation</span>
+        <span className="text-2xl font-black tracking-tighter leading-none bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">GENIUS</span>
+      </div>
+    )}
+  </div>
+);
+
+export default function App() {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [profile, setProfile] = useState<UserProfile>(() => {
+    const saved = localStorage.getItem("gen_genius_profile");
+    return saved ? JSON.parse(saved) : { name: "", bio: "" };
+  });
+
+  const [chats, setChats] = useState<Chat[]>(() => {
+    const saved = localStorage.getItem("gen_genius_chats");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.map((chat: any) => ({
+          ...chat,
+          createdAt: new Date(chat.createdAt),
+          messages: chat.messages.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+          }))
+        }));
+      } catch (e) {
+        console.error("Failed to parse chats", e);
+      }
+    }
+    return [];
+  });
+
+  const [activeChatId, setActiveChatId] = useState<string | null>(() => {
+    return localStorage.getItem("gen_genius_active_chat");
+  });
+
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("gen_genius_theme");
+    return (saved as "light" | "dark") || "light";
+  });
+
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("gen_genius_sidebar_collapsed") === "true";
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isRecycleBinOpen, setIsRecycleBinOpen] = useState(false);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<FileAttachment[]>([]);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [chatToReset, setChatToReset] = useState<string | null>(null);
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState<string | null>(null);
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const [isAssistantActive, setIsAssistantActive] = useState(false);
+  const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const lastActiveChatId = useRef<string | null>(null);
+
+  // Handle scroll events to show/hide "Jump to Latest" button
+  const handleScroll = useCallback(() => {
+    if (scrollRef.current) {
+      const { scrollHeight, clientHeight, scrollTop } = scrollRef.current;
+      // Show button if user is more than 300px away from bottom
+      const isNearBottom = scrollHeight - clientHeight - scrollTop < 300;
+      setShowJumpToBottom(!isNearBottom);
+    }
+  }, []);
+
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", handleScroll);
+      return () => scrollContainer.removeEventListener("scroll", handleScroll);
+    }
+  }, [handleScroll]);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = assistantLanguage;
+
+      recognitionRef.current.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (isAssistantActive) {
+          if (transcript.trim()) {
+            handleSend(transcript);
+          } else {
+            speakText("I didn't catch that. Please repeat.", "error-repeat");
+          }
+        } else {
+          setInput(prev => prev + (prev ? " " : "") + transcript);
+        }
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        if (event.error !== 'no-speech') {
+          console.error("Speech recognition error", event.error);
+        }
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+        // Auto-restart listening if assistant is active and not busy
+        if (isAssistantActive && !isSpeaking && !isLoading) {
+          setTimeout(() => {
+            if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
+              try {
+                recognitionRef.current?.start();
+              } catch (e) {}
+            }
+          }, 1000);
+        }
+      };
+    }
+  }, [isAssistantActive, isSpeaking, isLoading, assistantLanguage]);
+
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = assistantLanguage;
+    }
+  }, [assistantLanguage]);
+
+  useEffect(() => {
+    // Pre-load voices
+    window.speechSynthesis.getVoices();
+    const handleVoicesChanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+  }, []);
+
+  const toggleAssistant = () => {
+    if (isAssistantActive) {
+      // Shut down everything
+      setIsAssistantActive(false);
+      setIsListening(false);
+      setIsSpeaking(null);
+      recognitionRef.current?.stop();
+      window.speechSynthesis.cancel();
+    } else {
+      setIsAssistantActive(true);
+      // Listening will start via useEffect or manual trigger
+    }
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+      try {
+        window.speechSynthesis.cancel();
+        setIsSpeaking(null);
+        recognitionRef.current?.start();
+      } catch (e) {
+        console.error("Failed to start speech recognition", e);
+      }
+    }
+  };
+
+  const speakText = (text: string, messageId: string) => {
+    if (isSpeaking === messageId) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Set language
+    utterance.lang = assistantLanguage;
+    
+    // Voice selection for "30-year-old professional Indian tutor" (Male)
+    const voices = window.speechSynthesis.getVoices();
+    let selectedVoice = null;
+    
+    if (assistantLanguage === "hi-IN") {
+      // Try to find a male Hindi voice
+      selectedVoice = voices.find(v => v.lang === "hi-IN" && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi"))) ||
+                      voices.find(v => v.lang === "hi-IN" && v.name.includes("Google")) || 
+                      voices.find(v => v.lang === "hi-IN");
+    } else {
+      // Try to find a male Indian English voice
+      selectedVoice = voices.find(v => v.lang === "en-IN" && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi") || v.name.includes("Prabhat"))) ||
+                      voices.find(v => v.lang === "en-IN" && v.name.includes("Google")) || 
+                      voices.find(v => v.lang === "en-IN") ||
+                      voices.find(v => v.lang.startsWith("en") && (v.name.includes("Male") || v.name.includes("Guy")));
+    }
+    
+    if (selectedVoice) utterance.voice = selectedVoice;
+    
+    // Professional, friendly tutor settings
+    utterance.pitch = 0.9; // Slightly lower for a more masculine, mature tone
+    utterance.rate = 1.05;  // Slightly faster for real-time feel
+    
+    utterance.onend = () => {
+      setIsSpeaking(null);
+      // Restart listening after speaking if assistant is active
+      if (isAssistantActive && !isListening && !isLoading) {
+        setTimeout(() => {
+          if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
+            try {
+              recognitionRef.current?.start();
+            } catch (e) {}
+          }
+        }, 500);
+      }
+    };
+    utterance.onerror = () => setIsSpeaking(null);
+    
+    // Clean markdown for better speech
+    const cleanText = text.replace(/[#*`_~\[\]()]/g, '').replace(/Related Topics:.*/i, '');
+    utterance.text = cleanText;
+    
+    setIsSpeaking(messageId);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser && !profile.name) {
+        setProfile(prev => ({ ...prev, name: currentUser.displayName || "" }));
+      }
+    });
+    return () => unsubscribe();
+  }, [profile.name]);
+
+  // Persistence Effects
+  useEffect(() => {
+    localStorage.setItem("gen_genius_profile", JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
+    localStorage.setItem("gen_genius_sidebar_collapsed", String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
+
+  const activeChat = useMemo(() => {
+    return chats.find(c => c.id === activeChatId && !c.deletedAt) || null;
+  }, [chats, activeChatId]);
+
+  const activeChats = useMemo(() => {
+    return chats.filter(c => !c.deletedAt);
+  }, [chats]);
+
+  const deletedChats = useMemo(() => {
+    return chats.filter(c => !!c.deletedAt);
+  }, [chats]);
+
+  const messages = useMemo(() => {
+    if (activeChat) return activeChat.messages;
+    return [];
+  }, [activeChat]);
+
+  const relatedTopics = useMemo(() => {
+    if (messages.length === 0) return [];
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role === "model" && !lastMsg.isTyping) {
+      return lastMsg.relatedTopics || [];
+    }
+    return [];
+  }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem("gen_genius_chats", JSON.stringify(chats));
+  }, [chats]);
+
+  useEffect(() => {
+    if (activeChatId) {
+      localStorage.setItem("gen_genius_active_chat", activeChatId);
+    } else {
+      localStorage.removeItem("gen_genius_active_chat");
+    }
+  }, [activeChatId]);
+
+  useEffect(() => {
+    localStorage.setItem("gen_genius_theme", theme);
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [theme]);
+
+  const scrollToBottom = useCallback((force = false, smooth = true) => {
+    if (scrollRef.current) {
+      const { scrollHeight, clientHeight, scrollTop } = scrollRef.current;
+      const isNearBottom = scrollHeight - clientHeight - scrollTop < 100;
+      
+      if (force || isNearBottom) {
+        scrollRef.current.scrollTo({
+          top: scrollHeight,
+          behavior: smooth ? "smooth" : "auto",
+        });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // When switching chats, start at the top
+    if (activeChatId !== lastActiveChatId.current) {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = 0;
+      }
+      lastActiveChatId.current = activeChatId;
+      return;
+    }
+
+    // Scroll to bottom when messages change or loading state changes
+    const timeout = setTimeout(() => scrollToBottom(false, true), 100);
+    return () => clearTimeout(timeout);
+  }, [messages, isLoading, activeChatId, scrollToBottom]);
+
+  const createNewChat = (initialMessage?: Message, subject?: string) => {
+    // If it's a subject session, check if one already exists
+    if (subject) {
+      const existingChat = chats.find(c => c.subject === subject && !c.deletedAt);
+      if (existingChat) {
+        setActiveChatId(existingChat.id);
+        return existingChat;
+      }
+    }
+
+    const newChat: Chat = {
+      id: Date.now().toString(),
+      title: subject 
+        ? `${subject} Session`
+        : (initialMessage 
+            ? initialMessage.content.slice(0, 30) + (initialMessage.content.length > 30 ? "..." : "") 
+            : "New Session"),
+      subject: subject,
+      messages: initialMessage ? [initialMessage] : [],
+      createdAt: new Date(),
+    };
+    setChats(prev => [newChat, ...prev]);
+    setActiveChatId(newChat.id);
+    return newChat;
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const fortyEightHours = 48 * 60 * 60 * 1000;
+      setChats(prev => prev.filter(c => !c.deletedAt || (now - c.deletedAt < fortyEightHours)));
+    }, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newAttachments: FileAttachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+      
+      const promise = new Promise<FileAttachment>((resolve) => {
+        reader.onload = (event) => {
+          const base64 = (event.target?.result as string).split(',')[1];
+          const attachment: FileAttachment = {
+            name: file.name,
+            type: file.type,
+            data: base64,
+          };
+          
+          if (file.type.startsWith('image/')) {
+            attachment.preview = event.target?.result as string;
+          }
+          
+          resolve(attachment);
+        };
+      });
+      
+      reader.readAsDataURL(file);
+      newAttachments.push(await promise);
+    }
+    
+    setAttachedFiles(prev => [...prev, ...newAttachments]);
+    e.target.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const stopGeneration = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setIsLoading(false);
+    }
+  };
+
+  const handleSend = async (text: string = input) => {
+    const finalPrompt = text.trim();
+    if ((!finalPrompt && attachedFiles.length === 0) || isLoading) return;
+
+    const controller = new AbortController();
+    setAbortController(controller);
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: finalPrompt,
+      timestamp: new Date(),
+      attachments: attachedFiles.length > 0 ? [...attachedFiles] : undefined,
+      status: "sent"
+    };
+
+    let currentChatId = activeChatId;
+    let currentSubject = activeChat?.subject;
+
+    if (!currentChatId) {
+      const newChat = createNewChat(userMessage);
+      currentChatId = newChat.id;
+    } else {
+      setChats(prev => prev.map(c => {
+        if (c.id === currentChatId) {
+          const hasUserMessage = c.messages.some(m => m.role === "user");
+          const newTitle = !hasUserMessage ? (finalPrompt || "File Analysis").slice(0, 30) + (finalPrompt.length > 30 ? "..." : "") : c.title;
+          return {
+            ...c,
+            title: newTitle,
+            messages: [...c.messages, userMessage]
+          };
+        }
+        return c;
+      }));
+    }
+
+    const currentFiles = [...attachedFiles];
+    setInput("");
+    setAttachedFiles([]);
+    setIsLoading(true);
+
+    const aiMessageId = (Date.now() + 1).toString();
+
+    try {
+      const chatToUse = chats.find(c => c.id === currentChatId);
+      const history = chatToUse ? chatToUse.messages.map((m) => ({
+        role: m.role,
+        parts: [{ text: m.content }],
+      })) : [];
+
+      const stream = await getExamHelpStream(
+        finalPrompt || "Analyze the attached files.", 
+        history, 
+        currentSubject,
+        currentFiles.map(f => ({ mimeType: f.type, data: f.data })),
+        isAssistantActive
+      );
+      
+      let fullResponse = "";
+      
+      const aiMessage: Message = {
+        id: aiMessageId,
+        role: "model",
+        content: "",
+        timestamp: new Date(),
+        isTyping: true,
+        status: "sending"
+      };
+
+      setChats(prev => prev.map(c => {
+        if (c.id === currentChatId) {
+          return {
+            ...c,
+            messages: [...c.messages, aiMessage]
+          };
+        }
+        return c;
+      }));
+
+      for await (const chunk of stream) {
+        if (controller.signal.aborted) break;
+        const chunkText = chunk.text;
+        if (chunkText) {
+          fullResponse += chunkText;
+          setChats(prev => prev.map(c => {
+            if (c.id === currentChatId) {
+              return {
+                ...c,
+                messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: fullResponse } : m)
+              };
+            }
+            return c;
+          }));
+        }
+      }
+
+      if (!controller.signal.aborted) {
+        const topicsMatch = fullResponse.match(/Related Topics:\s*(.*)/i);
+        const topics = topicsMatch ? topicsMatch[1].split(",").map(t => t.trim()).filter(t => t.length > 0) : [];
+        const cleanResponse = fullResponse.replace(/Related Topics:\s*(.*)/i, "").trim();
+
+        setChats(prev => prev.map(c => {
+          if (c.id === currentChatId) {
+            return {
+              ...c,
+              messages: c.messages.map(m => m.id === aiMessageId ? { 
+                ...m, 
+                content: cleanResponse || "I'm sorry, I couldn't generate a complete response. Let's try that again!",
+                relatedTopics: topics,
+                isTyping: false,
+                status: "sent"
+              } : m)
+            };
+          }
+          return c;
+        }));
+
+        // Auto-speak if Genius Assistant is active
+        if (isAssistantActive) {
+          speakText(cleanResponse, aiMessageId);
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log("Generation stopped by user");
+      } else {
+        console.error(error);
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "model",
+          content: "I'm having trouble connecting to my brain right now. 🧠 Please check your connection and try again. I'm ready when you are!",
+          timestamp: new Date(),
+          status: "error"
+        };
+        setChats(prev => prev.map(c => {
+          if (c.id === currentChatId) {
+            return {
+              ...c,
+              messages: c.messages.map(m => m.id === aiMessageId ? { ...m, isTyping: false, status: "error", content: errorMessage.content } : m)
+            };
+          }
+          return c;
+        }));
+      }
+    } finally {
+      setIsLoading(false);
+      setAbortController(null);
+    }
+  };
+
+  const restoreChat = (id: string) => {
+    setChats(prev => prev.map(c => c.id === id ? { ...c, deletedAt: undefined } : c));
+  };
+
+  const permanentlyDeleteChat = (id: string) => {
+    setChats(prev => prev.filter(c => c.id !== id));
+  };
+
+  const startEditing = (id: string, title: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChatId(id);
+    setEditTitle(title);
+  };
+
+  const saveTitle = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (editingChatId && editTitle.trim()) {
+      setChats(prev => prev.map(c => c.id === editingChatId ? { ...c, title: editTitle.trim() } : c));
+    }
+    setEditingChatId(null);
+  };
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "light" ? "dark" : "light");
+  };
+
+  const handleRetry = () => {
+    const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
+    if (lastUserMessage) {
+      // Remove the last error message if it exists
+      setChats(prev => prev.map(c => {
+        if (c.id === activeChatId) {
+          return {
+            ...c,
+            messages: c.messages.filter(m => m.status !== "error")
+          };
+        }
+        return c;
+      }));
+      handleSend(lastUserMessage.content);
+    }
+  };
+
+  const handleTaskAction = (promptPrefix: string) => {
+    if (!input.trim()) {
+      setInput(promptPrefix);
+    } else {
+      handleSend(promptPrefix + input);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoginError(null);
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      console.error("Login failed", error);
+      if (error.code === "auth/popup-closed-by-user") {
+        setLoginError("The login popup was closed before completion. Please try again and keep the popup window open until finished.");
+      } else if (error.code === "auth/cancelled-via-interactive-request") {
+        setLoginError("Login was cancelled. Please try again.");
+      } else if (error.code === "auth/popup-blocked") {
+        setLoginError("The login popup was blocked by your browser. Please allow popups for this site and try again.");
+      } else {
+        setLoginError("An unexpected error occurred during login. Please try again.");
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logOut();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  const exportChatAsTxt = (chat: Chat) => {
+    const content = chat.messages.map(m => {
+      const role = m.role === "user" ? "YOU" : "GENGENIUS";
+      const time = m.timestamp.toLocaleString();
+      return `[${time}] ${role}:\n${m.content}\n\n${"-".repeat(50)}\n\n`;
+    }).join("");
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const fileName = chat.subject ? `${chat.subject.replace(/\s+/g, '_')}_Session.txt` : `Chat_${chat.id}.txt`;
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAllData = () => {
+    const data = JSON.stringify(chats, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `GenGenius_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importedChats = JSON.parse(event.target?.result as string);
+        if (Array.isArray(importedChats)) {
+          // Basic validation and date restoration
+          const validatedChats = importedChats.map((chat: any) => ({
+            ...chat,
+            createdAt: new Date(chat.createdAt),
+            messages: chat.messages.map((m: any) => ({
+              ...m,
+              timestamp: new Date(m.timestamp)
+            }))
+          }));
+
+          setChats(prev => {
+            const existingIds = new Set(prev.map(c => c.id));
+            const newChats = validatedChats.filter((c: any) => !existingIds.has(c.id));
+            return [...newChats, ...prev];
+          });
+          alert("Data imported successfully!");
+        }
+      } catch (error) {
+        console.error("Import failed", error);
+        alert("Failed to import data. Please ensure the file is a valid GenGenius backup.");
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    e.target.value = "";
+  };
+
+  const exportChatAsJson = (chat: Chat) => {
+    const data = JSON.stringify(chat, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const fileName = chat.subject ? `${chat.subject.replace(/\s+/g, '_')}_Session.json` : `Chat_${chat.id}.json`;
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const importChatFromJson = (chatId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importedChat = JSON.parse(event.target?.result as string);
+        if (importedChat && Array.isArray(importedChat.messages)) {
+          const validatedMessages = importedChat.messages.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+          }));
+
+          setChats(prev => prev.map(c => {
+            if (c.id === chatId) {
+              return {
+                ...c,
+                messages: validatedMessages
+              };
+            }
+            return c;
+          }));
+          alert("Chat session restored successfully!");
+        }
+      } catch (error) {
+        console.error("Import failed", error);
+        alert("Failed to import chat. Please ensure the file is a valid GenGenius session backup.");
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    e.target.value = "";
+  };
+
+  const resetChat = (id: string) => {
+    setChats(prev => prev.map(c => c.id === id ? { ...c, messages: [] } : c));
+    setIsResetDialogOpen(false);
+    setChatToReset(null);
+  };
+
+  const confirmDeleteChat = (id: string) => {
+    setChats(prev => prev.map(c => c.id === id ? { ...c, deletedAt: Date.now() } : c));
+    if (activeChatId === id) {
+      setActiveChatId(null);
+    }
+    setIsDeleteDialogOpen(false);
+    setChatToDelete(null);
+  };
+
+  const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => {
+    const isCollapsed = !isMobile && isSidebarCollapsed;
+
+    return (
+      <TooltipProvider delay={0}>
+        <div className="flex flex-col h-full bg-white dark:bg-[#0a0a0a] border-r dark:border-white/5 transition-all duration-300 ease-in-out">
+          {/* Sidebar Header */}
+          <div className={cn("p-6", isCollapsed && "p-4 flex flex-col items-center")}>
+            <div className="flex items-center justify-between w-full">
+              <AnimatePresence mode="wait">
+                {!isCollapsed ? (
+                  <motion.div 
+                    key="full-logo"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center justify-between w-full overflow-hidden"
+                  >
+                    <GeniusLogo />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg hover:bg-muted"
+                      onClick={() => setIsSidebarCollapsed(true)}
+                    >
+                      <PanelLeftClose className="w-4 h-4 text-foreground/50" />
+                    </Button>
+                  </motion.div>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <motion.div 
+                        key="collapsed-logo"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col items-center space-y-4"
+                      >
+                        <div 
+                          className="cursor-pointer"
+                          onClick={() => setIsSidebarCollapsed(false)}
+                        >
+                          <GeniusLogo collapsed />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg hover:bg-muted"
+                          onClick={() => setIsSidebarCollapsed(false)}
+                        >
+                          <PanelLeftOpen className="w-4 h-4 text-foreground/50" />
+                        </Button>
+                      </motion.div>
+                    } />
+                    <TooltipContent side="right">Expand Sidebar</TooltipContent>
+                  </Tooltip>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Sidebar Scrollable Area */}
+          <div className="flex-1 overflow-y-auto px-3 space-y-2 pb-6 custom-scrollbar">
+            <Button
+              variant="ghost"
+              className={cn(
+                "w-full justify-start hover:bg-muted group transition-all duration-200 rounded-lg h-9 px-3 text-foreground mb-2",
+                !activeChatId && "bg-muted",
+                isCollapsed && "px-0 justify-center"
+              )}
+              onClick={() => {
+                setActiveChatId(null);
+                setIsSidebarOpen(false);
+              }}
+            >
+              <Plus className={cn("w-3.5 h-3.5 shrink-0", !isCollapsed && "mr-3")} />
+              {!isCollapsed && <span className="font-bold text-xs">New Chat</span>}
+            </Button>
+
+            {/* Subjects Section */}
+            <div className="space-y-1">
+              {SUBJECTS.map((sub) => (
+                <Tooltip key={sub.name}>
+                  <TooltipTrigger render={
+                    <motion.div
+                      whileHover={{ x: 4 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Button
+                        variant="ghost"
+                        className={cn(
+                          "w-full justify-start hover:bg-muted group transition-all duration-300 rounded-lg h-10 px-3 text-foreground relative overflow-hidden",
+                          activeChat?.subject === sub.name 
+                            ? "bg-black dark:bg-white text-white dark:text-black shadow-md" 
+                            : "text-foreground",
+                          isCollapsed && "px-0 justify-center"
+                        )}
+                        onClick={() => {
+                          createNewChat(undefined, sub.name);
+                          setIsSidebarOpen(false);
+                        }}
+                      >
+                        <sub.icon className={cn(
+                          "w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110", 
+                          !isCollapsed && "mr-3", 
+                          activeChat?.subject === sub.name ? "text-current" : sub.color
+                        )} />
+                        {!isCollapsed && (
+                          <span className="font-bold text-xs">{sub.name}</span>
+                        )}
+                        {activeChat?.subject === sub.name && (
+                          <motion.div 
+                            layoutId="active-subject-glow"
+                            className="absolute inset-0 bg-white/10 dark:bg-black/10 pointer-events-none"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.3 }}
+                          />
+                        )}
+                      </Button>
+                    </motion.div>
+                  } />
+                  {isCollapsed && <TooltipContent side="right">{sub.name}</TooltipContent>}
+                </Tooltip>
+              ))}
+            </div>
+
+            {/* History Section */}
+            <div className="pt-2 space-y-0.5">
+              {activeChats.filter(c => !c.subject).map((chat) => (
+                <Tooltip key={chat.id}>
+                  <TooltipTrigger render={
+                    <div
+                      className={cn(
+                        "group relative flex items-center w-full rounded-lg transition-all duration-200 cursor-pointer",
+                        activeChatId === chat.id 
+                          ? "bg-black dark:bg-white text-white dark:text-black" 
+                          : "text-foreground hover:bg-muted",
+                        isCollapsed && "justify-center h-9"
+                      )}
+                      onClick={() => {
+                        setActiveChatId(chat.id);
+                        setIsSidebarOpen(false);
+                      }}
+                    >
+                      <div className={cn("flex-1 flex items-center min-w-0 px-3 h-9", isCollapsed && "px-0 justify-center")}>
+                        <MessageSquare className={cn("w-3 h-3 shrink-0", !isCollapsed && "mr-3")} />
+                        {!isCollapsed && (
+                          <span className={cn(
+                            "text-[11px] font-bold truncate",
+                            activeChatId === chat.id ? "text-white dark:text-black" : "text-foreground"
+                          )}>{chat.title}</span>
+                        )}
+                      </div>
+                      
+                      {!isCollapsed && (
+                        <div className="flex items-center pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-md hover:bg-background/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setChatToDelete(chat.id);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  } />
+                  {isCollapsed && <TooltipContent side="right">{chat.title}</TooltipContent>}
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+
+          {/* Sidebar Footer (Settings & Profile) */}
+          <div className="p-4 mt-auto border-t border-border space-y-2">
+            <p className="text-[8px] text-center text-foreground/30 font-bold uppercase tracking-widest mb-2">made by Arnav</p>
+            {!user ? (
+              <Button 
+                variant="outline" 
+                className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest border-border text-foreground", isCollapsed && "w-10 p-0 justify-center")}
+                onClick={handleGoogleLogin}
+              >
+                <LogIn className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
+                {!isCollapsed && <span>Login</span>}
+              </Button>
+            ) : (
+              <div className={cn("flex items-center gap-3 p-2 rounded-xl bg-muted border border-border", isCollapsed && "p-1 justify-center")}>
+                <Avatar className="w-8 h-8 rounded-lg">
+                  <AvatarImage src={user.photoURL || ""} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">{user.displayName?.charAt(0) || "U"}</AvatarFallback>
+                </Avatar>
+                {!isCollapsed && (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold truncate text-foreground">{user.displayName}</p>
+                    <p className="text-[9px] text-foreground/70 truncate">{user.email}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Button 
+              variant="ghost" 
+              className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-muted text-foreground", isCollapsed && "w-10 p-0 justify-center")}
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              <Settings className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
+              {!isCollapsed && <span>Settings</span>}
+            </Button>
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+  };
+
+  return (
+    <div className={`flex h-screen w-full bg-[#FAFAFA] dark:bg-[#0a0a0a] text-foreground overflow-hidden font-sans selection:bg-black dark:selection:bg-white selection:text-white dark:selection:text-black ${theme}`}>
+      {/* Desktop Sidebar */}
+      <aside 
+        className={cn(
+          "hidden md:flex border-r dark:border-white/5 bg-white dark:bg-[#0a0a0a] flex-col z-20 transition-all duration-300 ease-in-out relative",
+          isSidebarCollapsed ? "w-20" : "w-72"
+        )}
+      >
+        <SidebarContent />
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col h-full relative min-w-0">
+        {/* Header */}
+        <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-background z-10">
+          <div className="flex items-center space-x-4">
+            <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+              <SheetTrigger render={
+                <Button variant="ghost" size="icon" className="md:hidden rounded-lg hover:bg-muted">
+                  <Menu className="w-5 h-5 text-foreground" />
+                </Button>
+              } />
+              <SheetContent side="left" className="p-0 w-72 border-r border-border shadow-2xl bg-background">
+                <SidebarContent isMobile />
+              </SheetContent>
+            </Sheet>
+            <div className="flex items-center space-x-2">
+              {activeChat?.subject ? (
+                <span className="text-sm font-bold tracking-tight text-foreground">
+                  {activeChat.subject}
+                </span>
+              ) : (
+                <div className="scale-75 origin-left">
+                  <GeniusLogo />
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {activeChat && (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full w-8 h-8 hover:bg-muted"
+                  >
+                    <MoreVertical className="w-4 h-4 text-foreground" />
+                  </Button>
+                } />
+                <DropdownMenuContent align="end" className="w-48 bg-background border-2 border-border rounded-xl p-1 shadow-xl">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 px-2 py-1.5">
+                      Session Options
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-border mx-1" />
+                    
+                    <DropdownMenuItem 
+                      className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.json';
+                        input.onchange = (e) => importChatFromJson(activeChat.id, e as any);
+                        input.click();
+                      }}
+                    >
+                      <Upload className="w-3.5 h-3.5 mr-2" />
+                      Import Chat
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted">
+                        <Download className="w-3.5 h-3.5 mr-2" />
+                        Export Chat
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="bg-background border-2 border-border rounded-xl p-1 shadow-xl">
+                        <DropdownMenuItem 
+                          className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted"
+                          onClick={() => exportChatAsJson(activeChat)}
+                        >
+                          <FileText className="w-3.5 h-3.5 mr-2" />
+                          JSON Format
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted"
+                          onClick={() => exportChatAsTxt(activeChat)}
+                        >
+                          <FileDown className="w-3.5 h-3.5 mr-2" />
+                          TXT Format
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
+                    <DropdownMenuSeparator className="bg-border mx-1" />
+
+                    <DropdownMenuItem 
+                      className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-amber-600 cursor-pointer focus:bg-amber-50 dark:focus:bg-amber-900/20"
+                      onClick={() => {
+                        setChatToReset(activeChat.id);
+                        setIsResetDialogOpen(true);
+                      }}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                      Reset / Restart Chat
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem 
+                      className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-red-600 cursor-pointer focus:bg-red-50 dark:focus:bg-red-900/20"
+                      onClick={() => {
+                        setChatToDelete(activeChat.id);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-2" />
+                      Delete Chat
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full w-8 h-8 hover:bg-muted"
+              onClick={toggleTheme}
+            >
+              {theme === "light" ? <Moon className="w-4 h-4 text-foreground" /> : <Sun className="w-4 h-4 text-foreground" />}
+            </Button>
+          </div>
+        </header>
+
+        {/* Chat Area */}
+        <div 
+          className="flex-1 overflow-y-auto px-4 md:px-8 py-6 scroll-smooth custom-scrollbar relative" 
+          ref={scrollRef}
+        >
+          <AnimatePresence mode="wait">
+            {isAssistantActive ? (
+              <motion.div
+                key="assistant-view"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto text-center space-y-12"
+              >
+                <div className="relative">
+                  {/* Ripple Effects */}
+                  <AnimatePresence>
+                    {(isListening || isSpeaking) && (
+                      <>
+                        <motion.div
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1.5, opacity: 0.2 }}
+                          exit={{ scale: 2, opacity: 0 }}
+                          transition={{ repeat: Infinity, duration: 2 }}
+                          className="absolute inset-0 bg-primary rounded-full blur-2xl"
+                        />
+                        <motion.div
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1.8, opacity: 0.1 }}
+                          exit={{ scale: 2.5, opacity: 0 }}
+                          transition={{ repeat: Infinity, duration: 3, delay: 0.5 }}
+                          className="absolute inset-0 bg-accent rounded-full blur-3xl"
+                        />
+                      </>
+                    )}
+                  </AnimatePresence>
+
+                  <motion.div
+                    animate={{ 
+                      scale: isListening ? [1, 1.05, 1] : 1,
+                      y: isSpeaking ? [0, -5, 0] : 0
+                    }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="relative w-56 h-56 bg-gradient-to-br from-primary via-accent to-secondary rounded-[3rem] flex items-center justify-center border-8 border-white/20 shadow-[0_0_50px_rgba(0,86,179,0.3)] overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-black/10 backdrop-blur-sm" />
+                    <Bot className="relative w-28 h-28 text-white drop-shadow-2xl" />
+                    
+                    {/* Status Indicator */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
+                      {[0, 1, 2].map((i) => (
+                        <motion.div
+                          key={i}
+                          animate={{ 
+                            height: (isListening || isSpeaking) ? [4, 12, 4] : 4,
+                            opacity: (isListening || isSpeaking) ? 1 : 0.3
+                          }}
+                          transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }}
+                          className="w-1.5 bg-white rounded-full"
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h2 className="text-4xl font-black tracking-tighter bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
+                      GENIUS ASSISTANT
+                    </h2>
+                    <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted-foreground">
+                      {isListening ? "Listening to you..." : isSpeaking ? "Genius is speaking" : "Ready to help"}
+                    </p>
+                  </div>
+
+                  <div className="min-h-[120px] flex items-center justify-center px-6">
+                    <AnimatePresence mode="wait">
+                      {isSpeaking ? (
+                        <motion.div
+                          key="speaking-text"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="text-foreground text-2xl font-bold max-w-md mx-auto leading-tight italic"
+                        >
+                          "{messages[messages.length - 1]?.content.slice(0, 120)}..."
+                        </motion.div>
+                      ) : isListening ? (
+                        <motion.div
+                          key="listening-text"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="flex flex-col items-center gap-4"
+                        >
+                          <div className="flex gap-2">
+                            {[0, 1, 2].map(i => (
+                              <motion.div
+                                key={i}
+                                animate={{ scale: [1, 1.5, 1] }}
+                                transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
+                                className="w-3 h-3 bg-primary rounded-full"
+                              />
+                            ))}
+                          </div>
+                          <p className="text-lg font-medium text-muted-foreground">Go ahead, I'm listening...</p>
+                        </motion.div>
+                      ) : (
+                        <motion.p
+                          key="status-text"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="text-lg font-medium text-muted-foreground"
+                        >
+                          Tap the button below to start talking
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center gap-6">
+                  {!isAssistantActive ? (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="rounded-full px-16 h-24 text-2xl font-black bg-primary text-white hover:bg-primary/90 shadow-2xl border-4 border-primary/20"
+                      onClick={toggleAssistant}
+                    >
+                      <Mic className="w-10 h-10 mr-4" /> START ASSISTANT
+                    </Button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-4">
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        className={cn(
+                          "rounded-full px-16 h-24 text-2xl font-black transition-all shadow-2xl border-4 group relative overflow-hidden",
+                          isListening ? "bg-red-500 text-white border-red-400 scale-110" : 
+                          isSpeaking ? "bg-primary text-white border-primary/20" :
+                          "bg-background hover:bg-primary hover:text-white border-primary/10"
+                        )}
+                        onClick={() => {
+                          if (isSpeaking) {
+                            window.speechSynthesis.cancel();
+                            setIsSpeaking(null);
+                          } else {
+                            toggleListening();
+                          }
+                        }}
+                      >
+                        <div className="relative z-10 flex items-center">
+                          {isListening ? (
+                            <motion.div 
+                              animate={{ scale: [1, 1.2, 1] }}
+                              transition={{ repeat: Infinity, duration: 1 }}
+                              className="flex items-center"
+                            >
+                              <StopCircle className="w-10 h-10 mr-4" /> STOP
+                            </motion.div>
+                          ) : isSpeaking ? (
+                            <><VolumeX className="w-10 h-10 mr-4" /> STOP GENIUS</>
+                          ) : (
+                            <><Mic className="w-10 h-10 mr-4 group-hover:scale-125 transition-transform" /> START TALKING</>
+                          )}
+                        </div>
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 font-bold hover:text-red-600 hover:bg-red-50"
+                        onClick={toggleAssistant}
+                      >
+                        <Power className="w-4 h-4 mr-2" /> STOP ASSISTANT
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-4">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={
+                        <Button variant="ghost" size="lg" className="rounded-full h-14 px-6 font-bold gap-2 hover:bg-muted">
+                          <Languages className="w-5 h-5" />
+                          {assistantLanguage === "en-IN" ? "English" : "हिन्दी"}
+                        </Button>
+                      } />
+                      <DropdownMenuContent align="center" className="w-48 bg-background border-2 border-border rounded-xl p-1 shadow-xl">
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 px-2 py-1.5">Language / भाषा</DropdownMenuLabel>
+                          <DropdownMenuSeparator className="bg-border mx-1" />
+                        </DropdownMenuGroup>
+                        <DropdownMenuItem 
+                          className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted"
+                          onClick={() => setAssistantLanguage("en-IN")}
+                        >
+                          English (India) {assistantLanguage === "en-IN" && "✓"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted"
+                          onClick={() => setAssistantLanguage("hi-IN")}
+                        >
+                          Hindi (हिन्दी) {assistantLanguage === "hi-IN" && "✓"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <div className="max-w-2xl mx-auto space-y-6 pb-12">
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    key={activeChatId || "empty"}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="space-y-6"
+                  >
+                    {messages.length === 0 && (
+                      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                        <motion.div 
+                          initial={{ scale: 0.9, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ duration: 0.5 }}
+                          className="w-20 h-20 bg-muted rounded-[2rem] flex items-center justify-center text-foreground/20 shadow-inner"
+                        >
+                          <BrainCircuit className="w-10 h-10" />
+                        </motion.div>
+                        <div className="space-y-2">
+                          <h2 className="text-2xl font-bold tracking-tight text-foreground">GenGenius</h2>
+                          <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-[0.2em]">Select a subject to start learning</p>
+                        </div>
+                      </div>
+                    )}
+                    {messages.map((msg, idx) => (
+                      <motion.div
+                        key={msg.id}
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, ease: "easeOut" }}
+                        className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        <div className={`flex flex-col max-w-[85%] gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                          <div className={`px-5 py-3.5 rounded-2xl border transition-all relative group/msg ${
+                            msg.role === "user" 
+                              ? "bg-[#F5F5F5] dark:bg-[#111111] text-[#000000] dark:text-[#FFFFFF] border-transparent shadow-sm" 
+                              : "bg-background text-foreground border-border shadow-sm"
+                          }`}>
+                            <div className={cn(
+                              "markdown-body prose prose-sm max-w-none",
+                              msg.role === "user" 
+                                ? "text-[17px] font-bold leading-relaxed text-[#000000] dark:text-[#FFFFFF] prose-p:text-[#000000] dark:prose-p:text-[#FFFFFF] prose-headings:text-[#000000] dark:prose-headings:text-[#FFFFFF] prose-strong:text-[#000000] dark:prose-strong:text-[#FFFFFF]" 
+                                : "prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground leading-relaxed"
+                            )}>
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                  {msg.attachments.map((file, fIdx) => (
+                                    <div key={fIdx} className="relative group">
+                                      {file.preview ? (
+                                        <img 
+                                          src={file.preview} 
+                                          alt={file.name} 
+                                          className="w-24 h-24 object-cover rounded-xl border-2 border-border shadow-sm"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      ) : (
+                                        <div className="w-24 h-24 flex flex-col items-center justify-center bg-muted rounded-xl border-2 border-border p-2 text-center">
+                                          {file.type.includes('pdf') ? <FileIcon className="w-8 h-8 mb-1" /> : <Paperclip className="w-8 h-8 mb-1" />}
+                                          <span className="text-[8px] font-bold truncate w-full">{file.name}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {msg.isTyping ? (
+                                <TypingText 
+                                  text={msg.content} 
+                                  onComplete={() => {
+                                    setChats(prev => prev.map(c => {
+                                      if (c.id === activeChatId) {
+                                        return {
+                                          ...c,
+                                          messages: c.messages.map(m => m.id === msg.id ? { ...m, isTyping: false } : m)
+                                        };
+                                      }
+                                      return c;
+                                    }));
+                                  }} 
+                                />
+                              ) : (
+                                <Suspense fallback={<div className="animate-pulse bg-muted h-4 w-full rounded" />}>
+                                  <Suspense fallback={<div>Loading...</div>}>
+                                    <ReactMarkdown rehypePlugins={[rehypeRaw as any]}>{msg.content}</ReactMarkdown>
+                                  </Suspense>
+                                </Suspense>
+                              )}
+                            </div>
+                            
+                            {msg.role === "model" && !msg.isTyping && (
+                              <div className="absolute -right-12 top-0 opacity-0 group-hover/msg:opacity-100 transition-opacity flex flex-col gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "h-8 w-8 rounded-full bg-background border border-border shadow-sm",
+                                    isSpeaking === msg.id && "text-primary border-primary"
+                                  )}
+                                  onClick={() => speakText(msg.content, msg.id)}
+                                >
+                                  {isSpeaking === msg.id ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+
+                          {msg.status === "error" && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={handleRetry}
+                              className="mt-2 text-xs font-bold border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"
+                            >
+                              <RefreshCw className="w-3 h-3 mr-2" />
+                              Retry Request
+                            </Button>
+                          )}
+
+                          {msg.role === "model" && idx === messages.length - 1 && !msg.isTyping && msg.status !== "error" && relatedTopics.length > 0 && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="mt-2 flex flex-wrap gap-2"
+                            >
+                              {relatedTopics.map((topic) => (
+                                <button 
+                                  key={topic} 
+                                  className="bg-background hover:bg-muted border border-border px-4 py-1.5 rounded-full text-[10px] font-bold transition-all text-foreground"
+                                  onClick={() => handleSend(`Tell me more about ${topic}`)}
+                                >
+                                  {topic}
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                </AnimatePresence>
+                
+                {isLoading && (
+                  <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
+                    <div className="flex flex-col space-y-2">
+                      <div className="flex items-center space-x-2 px-5 py-3 bg-muted/30 rounded-2xl border border-border/50">
+                        <div className="flex space-x-1.5">
+                          <motion.div 
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ repeat: Infinity, duration: 1 }}
+                            className="w-1.5 h-1.5 bg-foreground/40 rounded-full" 
+                          />
+                          <motion.div 
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
+                            className="w-1.5 h-1.5 bg-foreground/40 rounded-full" 
+                          />
+                          <motion.div 
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
+                            className="w-1.5 h-1.5 bg-foreground/40 rounded-full" 
+                          />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 ml-2">
+                          Genius is thinking...
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Jump to Latest Button */}
+          <AnimatePresence>
+            {showJumpToBottom && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                className="fixed bottom-32 right-8 z-50"
+              >
+                <Button
+                  size="icon"
+                  className="rounded-full w-10 h-10 shadow-lg bg-black dark:bg-white text-white dark:text-black hover:scale-110 transition-transform"
+                  onClick={() => scrollToBottom(true, true)}
+                >
+                  <ChevronDown className="w-6 h-6" />
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Input Area - Hidden in Assistant Mode */}
+        {!isAssistantActive && (
+          <div className="p-6 bg-background z-30">
+          <div className="max-w-2xl mx-auto space-y-4">
+            {attachedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-2xl border-2 border-dashed border-border">
+                {attachedFiles.map((file, idx) => (
+                  <div key={idx} className="relative group">
+                    {file.preview ? (
+                      <img 
+                        src={file.preview} 
+                        alt={file.name} 
+                        className="w-16 h-16 object-cover rounded-xl border-2 border-border"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 flex flex-col items-center justify-center bg-muted rounded-xl border-2 border-border p-1 text-center">
+                        {file.type.includes('pdf') ? <FileIcon className="w-6 h-6 mb-1" /> : <Paperclip className="w-6 h-6 mb-1" />}
+                        <span className="text-[8px] font-bold truncate w-full">{file.name}</span>
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => removeFile(idx)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 max-w-2xl mx-auto mb-2">
+              {QUICK_ACTIONS.map((action) => (
+                <Button
+                  key={action.name}
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full text-[10px] font-bold uppercase tracking-wider h-8 border-border hover:bg-muted"
+                  onClick={() => handleTaskAction(action.prompt)}
+                >
+                  <action.icon className="w-3 h-3 mr-2" />
+                  {action.name}
+                </Button>
+              ))}
+            </div>
+
+            <div className="relative flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <input
+                  type="file"
+                  id="file-upload"
+                  className="hidden"
+                  multiple
+                  accept="image/*,.pdf,.txt"
+                  onChange={handleFileChange}
+                />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-12 w-12 rounded-xl hover:bg-muted text-foreground"
+                        onClick={() => document.getElementById('file-upload')?.click()}
+                      >
+                        <Paperclip className="w-6 h-6" />
+                      </Button>
+                    } />
+                    <TooltipContent>Attach Files</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-12 w-12 rounded-xl hover:bg-muted transition-all",
+                          isAssistantActive ? "text-primary bg-primary/10" : "text-foreground"
+                        )}
+                        onClick={() => {
+                          if (isAssistantActive && isListening) {
+                            recognitionRef.current?.stop();
+                            setIsListening(false);
+                          }
+                          setIsAssistantActive(!isAssistantActive);
+                        }}
+                      >
+                        <Sparkles className={cn("w-6 h-6", isAssistantActive && "animate-pulse")} />
+                      </Button>
+                    } />
+                    <TooltipContent>{isAssistantActive ? "Exit Genius Assistant" : "Talk to Genius Assistant"}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                {!isAssistantActive && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-12 w-12 rounded-xl hover:bg-muted transition-all",
+                            isListening ? "text-red-500 bg-red-50 dark:bg-red-900/20" : "text-foreground"
+                          )}
+                          onClick={toggleListening}
+                        >
+                          {isListening ? <StopCircle className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
+                        </Button>
+                      } />
+                      <TooltipContent>{isListening ? "Stop Listening" : "Voice Input"}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+
+              <div className="relative flex-1">
+                <Input
+                  placeholder="Ask anything..."
+                  className="bg-background border-2 border-border focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white text-lg h-16 rounded-2xl pr-14 font-bold placeholder:text-foreground/40 text-foreground shadow-md"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
+                />
+                {isLoading ? (
+                  <Button 
+                    size="icon" 
+                    variant="ghost"
+                    className="absolute right-2 top-2 h-12 w-12 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-all"
+                    onClick={stopGeneration}
+                  >
+                    <Square className="w-5 h-5 fill-current" />
+                  </Button>
+                ) : (
+                  <Button 
+                    size="icon" 
+                    variant="ghost"
+                    className="absolute right-2 top-2 h-12 w-12 rounded-xl hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-all text-foreground"
+                    onClick={() => handleSend()}
+                    disabled={!input.trim() && attachedFiles.length === 0}
+                  >
+                    <Send className="w-6 h-6" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            {isLoading && (
+              <div className="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-foreground/40">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Generating Response...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </main>
+
+      {/* Lazy Loaded Dialogs */}
+      <Suspense fallback={null}>
+        <SettingsDialog
+          isOpen={isSettingsOpen}
+          onOpenChange={setIsSettingsOpen}
+          user={user}
+          profile={profile}
+          setProfile={setProfile}
+          exportAllData={exportAllData}
+          importData={importData}
+          setIsRecycleBinOpen={setIsRecycleBinOpen}
+          handleLogout={handleLogout}
+          handleGoogleLogin={handleGoogleLogin}
+          loginError={loginError}
+        />
+
+        <ConfirmationDialog
+          isOpen={isResetDialogOpen}
+          onOpenChange={setIsResetDialogOpen}
+          title="Reset Chat?"
+          description="This will clear all messages in this session."
+          message="Are you sure you want to reset this session? This action cannot be undone."
+          onConfirm={() => chatToReset && resetChat(chatToReset)}
+          confirmText="Reset Session"
+          variant="amber"
+        />
+
+        <ConfirmationDialog
+          isOpen={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          title="Delete Chat?"
+          description="This will move the session to the Recycle Bin."
+          message="Are you sure you want to delete this session? You can restore it from the Recycle Bin within 48 hours."
+          onConfirm={() => chatToDelete && confirmDeleteChat(chatToDelete)}
+          confirmText="Delete Session"
+          variant="destructive"
+        />
+
+        <RecycleBinDialog
+          isOpen={isRecycleBinOpen}
+          onOpenChange={setIsRecycleBinOpen}
+          deletedChats={deletedChats}
+          restoreChat={restoreChat}
+          permanentlyDeleteChat={permanentlyDeleteChat}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+
+

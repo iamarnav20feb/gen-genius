@@ -1,0 +1,5 @@
+{
+  "name": "GenGenius",
+  "description": "AI assistant for Indian government exam preparation with voice support and exam-oriented explanations.",
+  "requestFramePermissions": ["microphone"]
+}
