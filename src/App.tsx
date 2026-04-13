@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense, memo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Send, 
@@ -106,7 +106,6 @@ import rehypeRaw from "rehype-raw";
 const SettingsDialog = lazy(() => import("./components/SettingsDialog"));
 const RecycleBinDialog = lazy(() => import("./components/RecycleBinDialog"));
 const ConfirmationDialog = lazy(() => import("./components/ConfirmationDialog"));
-const TypingText = lazy(() => import("./components/TypingText"));
 
 interface FileAttachment {
   name: string;
@@ -184,7 +183,417 @@ const GeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
   </div>
 );
 
-export default function App() {
+// --- Optimized Components ---
+
+const ChatMessage = memo(({ 
+  msg, 
+  idx, 
+  messagesCount, 
+  activeChatId, 
+  setChats, 
+  isSpeaking, 
+  speakText, 
+  handleRetry, 
+  handleSend,
+  relatedTopics 
+}: { 
+  msg: Message, 
+  idx: number, 
+  messagesCount: number,
+  activeChatId: string | null,
+  setChats: React.Dispatch<React.SetStateAction<Chat[]>>,
+  isSpeaking: string | null,
+  speakText: (text: string, id: string) => void,
+  handleRetry: () => void,
+  handleSend: (text: string) => void,
+  relatedTopics: string[]
+}) => {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+    >
+      <div className={`flex flex-col max-w-[85%] gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+        <div className={`px-4 py-3 rounded-2xl border transition-all relative group/msg ${
+          msg.role === "user" 
+            ? "bg-[#F5F5F5] dark:bg-[#111111] text-[#000000] dark:text-[#FFFFFF] border-transparent shadow-sm" 
+            : "bg-background text-foreground border-border shadow-sm"
+        }`}>
+          <div className={cn(
+            "markdown-body prose prose-sm max-w-none",
+            msg.role === "user" 
+              ? "text-[16px] font-bold leading-relaxed text-[#000000] dark:text-[#FFFFFF] prose-p:text-[#000000] dark:prose-p:text-[#FFFFFF] prose-headings:text-[#000000] dark:prose-headings:text-[#FFFFFF] prose-strong:text-[#000000] dark:prose-strong:text-[#FFFFFF]" 
+              : "prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground leading-relaxed"
+          )}>
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {msg.attachments.map((file, fIdx) => (
+                  <div key={fIdx} className="relative group">
+                    {file.preview ? (
+                      <img 
+                        src={file.preview} 
+                        alt={file.name} 
+                        className="w-20 h-20 object-cover rounded-xl border border-border shadow-sm"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 flex flex-col items-center justify-center bg-muted rounded-xl border border-border p-2 text-center">
+                        {file.type.includes('pdf') ? <FileIcon className="w-6 h-6 mb-1" /> : <Paperclip className="w-6 h-6 mb-1" />}
+                        <span className="text-[8px] font-bold truncate w-full">{file.name}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {msg.isTyping && !msg.content ? (
+              <div className="flex gap-1 items-center py-2 px-1">
+                <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1 }} className="w-2 h-2 bg-primary rounded-full" />
+                <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-2 h-2 bg-primary rounded-full" />
+                <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-2 h-2 bg-primary rounded-full" />
+              </div>
+            ) : (
+              <Suspense fallback={<div className="animate-pulse bg-muted h-4 w-full rounded" />}>
+                <ReactMarkdown rehypePlugins={[rehypeRaw as any]}>{msg.content}</ReactMarkdown>
+              </Suspense>
+            )}
+          </div>
+          
+          {msg.role === "model" && !msg.isTyping && (
+            <div className="absolute -right-10 top-0 opacity-0 group-hover/msg:opacity-100 transition-opacity flex flex-col gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-7 w-7 rounded-full bg-background border border-border shadow-sm",
+                  isSpeaking === msg.id && "text-primary border-primary"
+                )}
+                onClick={() => speakText(msg.content, msg.id)}
+              >
+                {isSpeaking === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {msg.status === "error" && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRetry}
+            className="mt-1 text-[10px] font-bold border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg h-7"
+          >
+            <RefreshCw className="w-3 h-3 mr-2" />
+            Retry
+          </Button>
+        )}
+
+        {msg.role === "model" && idx === messagesCount - 1 && !msg.isTyping && msg.status !== "error" && relatedTopics.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-1 flex flex-wrap gap-1.5"
+          >
+            {relatedTopics.map((topic) => (
+              <button 
+                key={topic} 
+                className="bg-background hover:bg-muted border border-border px-3 py-1 rounded-full text-[9px] font-bold transition-all text-foreground"
+                onClick={() => handleSend(`Tell me more about ${topic}`)}
+              >
+                {topic}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+});
+
+ChatMessage.displayName = "ChatMessage";
+
+const SidebarItem = memo(({ 
+  chat, 
+  activeChatId, 
+  isCollapsed, 
+  setActiveChatId, 
+  setIsSidebarOpen, 
+  setChatToDelete, 
+  setIsDeleteDialogOpen 
+}: {
+  chat: Chat,
+  activeChatId: string | null,
+  isCollapsed: boolean,
+  setActiveChatId: (id: string) => void,
+  setIsSidebarOpen: (open: boolean) => void,
+  setChatToDelete: (id: string) => void,
+  setIsDeleteDialogOpen: (open: boolean) => void
+}) => (
+  <Tooltip key={chat.id}>
+    <TooltipTrigger render={
+      <motion.div
+        variants={{
+          hidden: { opacity: 0, x: -10 },
+          visible: { opacity: 1, x: 0 }
+        }}
+        whileHover={{ x: 4 }}
+        className={cn(
+          "group relative flex items-center w-full rounded-lg transition-all duration-200 cursor-pointer",
+          activeChatId === chat.id 
+            ? "bg-black dark:bg-white text-white dark:text-black" 
+            : "text-foreground hover:bg-muted",
+          isCollapsed && "justify-center h-9"
+        )}
+        onClick={() => {
+          setActiveChatId(chat.id);
+          setIsSidebarOpen(false);
+        }}
+      >
+        <div className={cn("flex-1 flex items-center min-w-0 px-3 h-9", isCollapsed && "px-0 justify-center")}>
+          <MessageSquare className={cn("w-3 h-3 shrink-0", !isCollapsed && "mr-3")} />
+          {!isCollapsed && (
+            <span className={cn(
+              "text-[11px] font-bold truncate",
+              activeChatId === chat.id ? "text-white dark:text-black" : "text-foreground"
+            )}>{chat.title}</span>
+          )}
+        </div>
+        
+        {!isCollapsed && (
+          <div className="flex items-center pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 rounded-md hover:bg-background/20"
+              onClick={(e) => {
+                e.stopPropagation();
+                setChatToDelete(chat.id);
+                setIsDeleteDialogOpen(true);
+              }}
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+      </motion.div>
+    } />
+    {isCollapsed && <TooltipContent side="right">{chat.title}</TooltipContent>}
+  </Tooltip>
+));
+
+SidebarItem.displayName = "SidebarItem";
+
+const ChatInput = memo(({ 
+  onSend, 
+  isLoading, 
+  isAssistantActive, 
+  setIsAssistantActive, 
+  isListening, 
+  toggleListening,
+  handleFileChange,
+  attachedFiles,
+  removeFile,
+  handleTaskAction,
+  stopGeneration,
+  recognitionRef,
+  setIsListening
+}: {
+  onSend: (text: string) => void,
+  isLoading: boolean,
+  isAssistantActive: boolean,
+  setIsAssistantActive: (active: boolean) => void,
+  isListening: boolean,
+  toggleListening: () => void,
+  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
+  attachedFiles: FileAttachment[],
+  removeFile: (idx: number) => void,
+  handleTaskAction: (prompt: string) => void,
+  stopGeneration: () => void,
+  recognitionRef: React.RefObject<any>,
+  setIsListening: (listening: boolean) => void
+}) => {
+  const [localInput, setLocalInput] = useState("");
+
+  const handleSubmit = () => {
+    if ((localInput.trim() || attachedFiles.length > 0) && !isLoading) {
+      onSend(localInput);
+      setLocalInput("");
+    }
+  };
+
+  return (
+    <div className="p-6 bg-background z-30">
+      <div className="max-w-2xl mx-auto space-y-4">
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-2xl border-2 border-dashed border-border">
+            {attachedFiles.map((file, idx) => (
+              <div key={idx} className="relative group">
+                {file.preview ? (
+                  <img 
+                    src={file.preview} 
+                    alt={file.name} 
+                    className="w-16 h-16 object-cover rounded-xl border-2 border-border"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-16 h-16 flex flex-col items-center justify-center bg-muted rounded-xl border-2 border-border p-1 text-center">
+                    {file.type.includes('pdf') ? <FileIcon className="w-6 h-6 mb-1" /> : <Paperclip className="w-6 h-6 mb-1" />}
+                    <span className="text-[8px] font-bold truncate w-full">{file.name}</span>
+                  </div>
+                )}
+                <button 
+                  onClick={() => removeFile(idx)}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 max-w-2xl mx-auto mb-2">
+          {QUICK_ACTIONS.map((action) => (
+            <Button
+              key={action.name}
+              variant="outline"
+              size="sm"
+              className="rounded-full text-[10px] font-bold uppercase tracking-wider h-8 border-border hover:bg-muted"
+              onClick={() => handleTaskAction(action.prompt)}
+            >
+              <action.icon className="w-3 h-3 mr-2" />
+              {action.name}
+            </Button>
+          ))}
+        </div>
+
+        <div className="relative flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <input
+              type="file"
+              id="file-upload"
+              className="hidden"
+              multiple
+              accept="image/*,.pdf,.txt"
+              onChange={handleFileChange}
+            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger render={
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-12 w-12 rounded-xl hover:bg-muted text-foreground"
+                      onClick={() => document.getElementById('file-upload')?.click()}
+                    >
+                      <Paperclip className="w-6 h-6" />
+                    </Button>
+                  </motion.div>
+                } />
+                <TooltipContent>Attach Files</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger render={
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-12 w-12 rounded-xl hover:bg-muted transition-all",
+                        isAssistantActive ? "text-primary bg-primary/10" : "text-foreground"
+                      )}
+                      onClick={() => {
+                        if (isAssistantActive && isListening) {
+                          recognitionRef.current?.stop();
+                          setIsListening(false);
+                        }
+                        setIsAssistantActive(!isAssistantActive);
+                      }}
+                    >
+                      <Sparkles className={cn("w-6 h-6", isAssistantActive && "animate-pulse")} />
+                    </Button>
+                  </motion.div>
+                } />
+                <TooltipContent>{isAssistantActive ? "Exit Genius Assistant" : "Talk to Genius Assistant"}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {!isAssistantActive && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-12 w-12 rounded-xl hover:bg-muted transition-all",
+                          isListening ? "text-red-500 bg-red-50 dark:bg-red-900/20" : "text-foreground"
+                        )}
+                        onClick={toggleListening}
+                      >
+                        {isListening ? <StopCircle className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
+                      </Button>
+                    </motion.div>
+                  } />
+                  <TooltipContent>{isListening ? "Stop Listening" : "Voice Input"}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+
+          <div className="relative flex-1">
+            <Input
+              placeholder="Ask anything..."
+              className="bg-background border-2 border-border focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white text-lg h-16 rounded-2xl pr-14 font-bold placeholder:text-foreground/40 text-foreground shadow-md"
+              value={localInput}
+              onChange={(e) => setLocalInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSubmit())}
+            />
+            {isLoading ? (
+              <Button 
+                size="icon" 
+                variant="ghost"
+                className="absolute right-2 top-2 h-12 w-12 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-all"
+                onClick={stopGeneration}
+              >
+                <Square className="w-5 h-5 fill-current" />
+              </Button>
+            ) : (
+              <Button 
+                size="icon" 
+                variant="ghost"
+                className="absolute right-2 top-2 h-12 w-12 rounded-xl hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-all text-foreground"
+                onClick={handleSubmit}
+                disabled={!localInput.trim() && attachedFiles.length === 0}
+              >
+                <Send className="w-6 h-6" />
+              </Button>
+            )}
+          </div>
+        </div>
+        
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-foreground/40">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Generating Response...
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+ChatInput.displayName = "ChatInput";
+
+function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem("gen_genius_profile");
@@ -222,6 +631,7 @@ export default function App() {
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     return localStorage.getItem("gen_genius_sidebar_collapsed") === "true";
@@ -343,7 +753,7 @@ export default function App() {
     }
   };
 
-  const toggleListening = () => {
+  const toggleListening = useCallback(() => {
     if (isListening) {
       recognitionRef.current?.stop();
     } else {
@@ -355,9 +765,9 @@ export default function App() {
         console.error("Failed to start speech recognition", e);
       }
     }
-  };
+  }, [isListening]);
 
-  const speakText = (text: string, messageId: string) => {
+  const speakText = useCallback((text: string, messageId: string) => {
     if (isSpeaking === messageId) {
       window.speechSynthesis.cancel();
       setIsSpeaking(null);
@@ -370,21 +780,24 @@ export default function App() {
     // Set language
     utterance.lang = assistantLanguage;
     
-    // Voice selection for "30-year-old professional Indian tutor" (Male)
+    // Voice selection for "Genius" (Male Indian Voice)
     const voices = window.speechSynthesis.getVoices();
     let selectedVoice = null;
     
+    const isFemale = (name: string) => 
+      name.includes("Female") || name.includes("Girl") || name.includes("Woman") || 
+      name.includes("Zira") || name.includes("Veena") || name.includes("Heera");
+
     if (assistantLanguage === "hi-IN") {
       // Try to find a male Hindi voice
-      selectedVoice = voices.find(v => v.lang === "hi-IN" && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi"))) ||
-                      voices.find(v => v.lang === "hi-IN" && v.name.includes("Google")) || 
-                      voices.find(v => v.lang === "hi-IN");
+      selectedVoice = voices.find(v => v.lang === "hi-IN" && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi"))) ||
+                      voices.find(v => v.lang === "hi-IN" && !isFemale(v.name));
     } else {
-      // Try to find a male Indian English voice
-      selectedVoice = voices.find(v => v.lang === "en-IN" && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi") || v.name.includes("Prabhat"))) ||
-                      voices.find(v => v.lang === "en-IN" && v.name.includes("Google")) || 
-                      voices.find(v => v.lang === "en-IN") ||
-                      voices.find(v => v.lang.startsWith("en") && (v.name.includes("Male") || v.name.includes("Guy")));
+      // Try to find a male Indian English voice (en-IN)
+      selectedVoice = voices.find(v => v.lang === "en-IN" && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi") || v.name.includes("Prabhat"))) ||
+                      voices.find(v => v.lang === "en-IN" && !isFemale(v.name)) ||
+                      // Fallback to any male English voice
+                      voices.find(v => v.lang.startsWith("en") && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy")));
     }
     
     if (selectedVoice) utterance.voice = selectedVoice;
@@ -414,7 +827,7 @@ export default function App() {
     
     setIsSpeaking(messageId);
     window.speechSynthesis.speak(utterance);
-  };
+  }, [isSpeaking, assistantLanguage, isAssistantActive, isListening, isLoading]);
 
   // Auth Listener
   useEffect(() => {
@@ -453,6 +866,11 @@ export default function App() {
     return [];
   }, [activeChat]);
 
+  const renderedMessages = useMemo(() => {
+    // Limit DOM load by only rendering the last 30 messages (WhatsApp-level performance)
+    return messages.slice(-30);
+  }, [messages]);
+
   const relatedTopics = useMemo(() => {
     if (messages.length === 0) return [];
     const lastMsg = messages[messages.length - 1];
@@ -462,11 +880,19 @@ export default function App() {
     return [];
   }, [messages]);
 
+  // Debounce localStorage updates to prevent blocking the main thread during streaming
   useEffect(() => {
-    localStorage.setItem("gen_genius_chats", JSON.stringify(chats));
+    const timeout = setTimeout(() => {
+      localStorage.setItem("gen_genius_chats", JSON.stringify(chats));
+    }, 1000);
+    return () => clearTimeout(timeout);
   }, [chats]);
 
   useEffect(() => {
+    setStreamingMessage(null);
+    if (abortController) {
+      abortController.abort();
+    }
     if (activeChatId) {
       localStorage.setItem("gen_genius_active_chat", activeChatId);
     } else {
@@ -486,7 +912,8 @@ export default function App() {
   const scrollToBottom = useCallback((force = false, smooth = true) => {
     if (scrollRef.current) {
       const { scrollHeight, clientHeight, scrollTop } = scrollRef.current;
-      const isNearBottom = scrollHeight - clientHeight - scrollTop < 100;
+      // Increased threshold to 150px for better detection on mobile
+      const isNearBottom = scrollHeight - clientHeight - scrollTop < 150;
       
       if (force || isNearBottom) {
         scrollRef.current.scrollTo({
@@ -507,12 +934,19 @@ export default function App() {
       return;
     }
 
-    // Scroll to bottom when messages change or loading state changes
-    const timeout = setTimeout(() => scrollToBottom(false, true), 100);
-    return () => clearTimeout(timeout);
-  }, [messages, isLoading, activeChatId, scrollToBottom]);
+    const lastMessage = messages[messages.length - 1];
+    const isUserMessage = lastMessage?.role === "user";
+    const isTyping = lastMessage?.isTyping;
 
-  const createNewChat = (initialMessage?: Message, subject?: string) => {
+    // Force scroll if it's a user message, if AI is currently typing, or if we are in loading state
+    // This ensures we keep scrolling as content grows during streaming
+    const force = isUserMessage || isTyping || isLoading;
+
+    const timeout = requestAnimationFrame(() => scrollToBottom(force, true));
+    return () => cancelAnimationFrame(timeout);
+  }, [messages, streamingMessage, isLoading, activeChatId, scrollToBottom]);
+
+  const createNewChat = useCallback((initialMessage?: Message, subject?: string) => {
     // If it's a subject session, check if one already exists
     if (subject) {
       const existingChat = chats.find(c => c.subject === subject && !c.deletedAt);
@@ -536,7 +970,7 @@ export default function App() {
     setChats(prev => [newChat, ...prev]);
     setActiveChatId(newChat.id);
     return newChat;
-  };
+  }, [chats]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -593,7 +1027,7 @@ export default function App() {
     }
   };
 
-  const handleSend = async (text: string = input) => {
+  const handleSend = useCallback(async (text: string = input) => {
     const finalPrompt = text.trim();
     if ((!finalPrompt && attachedFiles.length === 0) || isLoading) return;
 
@@ -620,10 +1054,15 @@ export default function App() {
         if (c.id === currentChatId) {
           const hasUserMessage = c.messages.some(m => m.role === "user");
           const newTitle = !hasUserMessage ? (finalPrompt || "File Analysis").slice(0, 30) + (finalPrompt.length > 30 ? "..." : "") : c.title;
+          
+          // Limit total messages in memory to 100 for performance
+          const updatedMessages = [...c.messages, userMessage];
+          const limitedMessages = updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages;
+          
           return {
             ...c,
             title: newTitle,
-            messages: [...c.messages, userMessage]
+            messages: limitedMessages
           };
         }
         return c;
@@ -663,30 +1102,16 @@ export default function App() {
         status: "sending"
       };
 
-      setChats(prev => prev.map(c => {
-        if (c.id === currentChatId) {
-          return {
-            ...c,
-            messages: [...c.messages, aiMessage]
-          };
-        }
-        return c;
-      }));
+      setStreamingMessage(aiMessage);
 
       for await (const chunk of stream) {
         if (controller.signal.aborted) break;
         const chunkText = chunk.text;
         if (chunkText) {
           fullResponse += chunkText;
-          setChats(prev => prev.map(c => {
-            if (c.id === currentChatId) {
-              return {
-                ...c,
-                messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: fullResponse } : m)
-              };
-            }
-            return c;
-          }));
+          
+          // Update streaming message directly - much faster than updating entire chats array
+          setStreamingMessage(prev => prev ? { ...prev, content: fullResponse } : null);
         }
       }
 
@@ -695,21 +1120,28 @@ export default function App() {
         const topics = topicsMatch ? topicsMatch[1].split(",").map(t => t.trim()).filter(t => t.length > 0) : [];
         const cleanResponse = fullResponse.replace(/Related Topics:\s*(.*)/i, "").trim();
 
+        const finalAiMessage: Message = {
+          id: aiMessageId,
+          role: "model",
+          content: cleanResponse || "I'm sorry, I couldn't generate a complete response. Let's try that again!",
+          timestamp: new Date(),
+          relatedTopics: topics,
+          isTyping: false,
+          status: "sent"
+        };
+
         setChats(prev => prev.map(c => {
           if (c.id === currentChatId) {
+            const updatedMessages = [...c.messages, finalAiMessage];
             return {
               ...c,
-              messages: c.messages.map(m => m.id === aiMessageId ? { 
-                ...m, 
-                content: cleanResponse || "I'm sorry, I couldn't generate a complete response. Let's try that again!",
-                relatedTopics: topics,
-                isTyping: false,
-                status: "sent"
-              } : m)
+              messages: updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages
             };
           }
           return c;
         }));
+        
+        setStreamingMessage(null);
 
         // Auto-speak if Genius Assistant is active
         if (isAssistantActive) {
@@ -742,7 +1174,7 @@ export default function App() {
       setIsLoading(false);
       setAbortController(null);
     }
-  };
+  }, [input, attachedFiles, isLoading, activeChatId, activeChat, chats, isAssistantActive, speakText, createNewChat]);
 
   const restoreChat = (id: string) => {
     setChats(prev => prev.map(c => c.id === id ? { ...c, deletedAt: undefined } : c));
@@ -1014,22 +1446,38 @@ export default function App() {
           </div>
 
           {/* Sidebar Scrollable Area */}
-          <div className="flex-1 overflow-y-auto px-3 space-y-2 pb-6 custom-scrollbar">
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full justify-start hover:bg-muted group transition-all duration-200 rounded-lg h-9 px-3 text-foreground mb-2",
-                !activeChatId && "bg-muted",
-                isCollapsed && "px-0 justify-center"
-              )}
-              onClick={() => {
-                setActiveChatId(null);
-                setIsSidebarOpen(false);
-              }}
-            >
-              <Plus className={cn("w-3.5 h-3.5 shrink-0", !isCollapsed && "mr-3")} />
-              {!isCollapsed && <span className="font-bold text-xs">New Chat</span>}
-            </Button>
+          <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={{
+              visible: {
+                transition: {
+                  staggerChildren: 0.05
+                }
+              }
+            }}
+            className="flex-1 overflow-y-auto px-3 space-y-2 pb-6 custom-scrollbar"
+          >
+            <motion.div variants={{
+              hidden: { opacity: 0, x: -10 },
+              visible: { opacity: 1, x: 0 }
+            }}>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start hover:bg-muted group transition-all duration-200 rounded-lg h-9 px-3 text-foreground mb-2",
+                  !activeChatId && "bg-muted",
+                  isCollapsed && "px-0 justify-center"
+                )}
+                onClick={() => {
+                  setActiveChatId(null);
+                  setIsSidebarOpen(false);
+                }}
+              >
+                <Plus className={cn("w-3.5 h-3.5 shrink-0", !isCollapsed && "mr-3")} />
+                {!isCollapsed && <span className="font-bold text-xs">New Chat</span>}
+              </Button>
+            </motion.div>
 
             {/* Subjects Section */}
             <div className="space-y-1">
@@ -1037,13 +1485,18 @@ export default function App() {
                 <Tooltip key={sub.name}>
                   <TooltipTrigger render={
                     <motion.div
-                      whileHover={{ x: 4 }}
+                      variants={{
+                        hidden: { opacity: 0, x: -10 },
+                        visible: { opacity: 1, x: 0 }
+                      }}
+                      whileHover={{ x: 4, backgroundColor: "var(--muted)" }}
                       whileTap={{ scale: 0.98 }}
+                      className="rounded-lg"
                     >
                       <Button
                         variant="ghost"
                         className={cn(
-                          "w-full justify-start hover:bg-muted group transition-all duration-300 rounded-lg h-10 px-3 text-foreground relative overflow-hidden",
+                          "w-full justify-start hover:bg-transparent group transition-all duration-300 rounded-lg h-10 px-3 text-foreground relative overflow-hidden",
                           activeChat?.subject === sub.name 
                             ? "bg-black dark:bg-white text-white dark:text-black shadow-md" 
                             : "text-foreground",
@@ -1082,54 +1535,19 @@ export default function App() {
             {/* History Section */}
             <div className="pt-2 space-y-0.5">
               {activeChats.filter(c => !c.subject).map((chat) => (
-                <Tooltip key={chat.id}>
-                  <TooltipTrigger render={
-                    <div
-                      className={cn(
-                        "group relative flex items-center w-full rounded-lg transition-all duration-200 cursor-pointer",
-                        activeChatId === chat.id 
-                          ? "bg-black dark:bg-white text-white dark:text-black" 
-                          : "text-foreground hover:bg-muted",
-                        isCollapsed && "justify-center h-9"
-                      )}
-                      onClick={() => {
-                        setActiveChatId(chat.id);
-                        setIsSidebarOpen(false);
-                      }}
-                    >
-                      <div className={cn("flex-1 flex items-center min-w-0 px-3 h-9", isCollapsed && "px-0 justify-center")}>
-                        <MessageSquare className={cn("w-3 h-3 shrink-0", !isCollapsed && "mr-3")} />
-                        {!isCollapsed && (
-                          <span className={cn(
-                            "text-[11px] font-bold truncate",
-                            activeChatId === chat.id ? "text-white dark:text-black" : "text-foreground"
-                          )}>{chat.title}</span>
-                        )}
-                      </div>
-                      
-                      {!isCollapsed && (
-                        <div className="flex items-center pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 rounded-md hover:bg-background/20"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setChatToDelete(chat.id);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  } />
-                  {isCollapsed && <TooltipContent side="right">{chat.title}</TooltipContent>}
-                </Tooltip>
+                <SidebarItem 
+                  key={chat.id}
+                  chat={chat}
+                  activeChatId={activeChatId}
+                  isCollapsed={isCollapsed}
+                  setActiveChatId={setActiveChatId}
+                  setIsSidebarOpen={setIsSidebarOpen}
+                  setChatToDelete={setChatToDelete}
+                  setIsDeleteDialogOpen={setIsDeleteDialogOpen}
+                />
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Sidebar Footer (Settings & Profile) */}
           <div className="p-4 mt-auto border-t border-border space-y-2">
@@ -1175,14 +1593,21 @@ export default function App() {
   return (
     <div className={`flex h-screen w-full bg-[#FAFAFA] dark:bg-[#0a0a0a] text-foreground overflow-hidden font-sans selection:bg-black dark:selection:bg-white selection:text-white dark:selection:text-black ${theme}`}>
       {/* Desktop Sidebar */}
-      <aside 
-        className={cn(
-          "hidden md:flex border-r dark:border-white/5 bg-white dark:bg-[#0a0a0a] flex-col z-20 transition-all duration-300 ease-in-out relative",
-          isSidebarCollapsed ? "w-20" : "w-72"
-        )}
+      <motion.aside 
+        initial={false}
+        animate={{ 
+          width: isSidebarCollapsed ? 80 : 288,
+        }}
+        transition={{ 
+          type: "spring",
+          stiffness: 300,
+          damping: 30,
+          mass: 1
+        }}
+        className="hidden md:flex border-r dark:border-white/5 bg-white dark:bg-[#0a0a0a] flex-col z-20 relative overflow-hidden"
       >
         <SidebarContent />
-      </aside>
+      </motion.aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full relative min-w-0">
@@ -1200,15 +1625,25 @@ export default function App() {
               </SheetContent>
             </Sheet>
             <div className="flex items-center space-x-2">
-              {activeChat?.subject ? (
-                <span className="text-sm font-bold tracking-tight text-foreground">
-                  {activeChat.subject}
-                </span>
-              ) : (
-                <div className="scale-75 origin-left">
-                  <GeniusLogo />
-                </div>
-              )}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeChat?.subject || "logo"}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {activeChat?.subject ? (
+                    <span className="text-sm font-bold tracking-tight text-foreground">
+                      {activeChat.subject}
+                    </span>
+                  ) : (
+                    <div className="scale-75 origin-left">
+                      <GeniusLogo />
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
           
@@ -1516,171 +1951,82 @@ export default function App() {
               </motion.div>
             ) : (
               <div className="max-w-2xl mx-auto space-y-6 pb-12">
-                <AnimatePresence mode="popLayout">
-                  <motion.div
-                    key={activeChatId || "empty"}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="space-y-6"
-                  >
-                    {messages.length === 0 && (
-                      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
-                        <motion.div 
-                          initial={{ scale: 0.9, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ duration: 0.5 }}
-                          className="w-20 h-20 bg-muted rounded-[2rem] flex items-center justify-center text-foreground/20 shadow-inner"
-                        >
-                          <BrainCircuit className="w-10 h-10" />
-                        </motion.div>
-                        <div className="space-y-2">
-                          <h2 className="text-2xl font-bold tracking-tight text-foreground">GenGenius</h2>
-                          <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-[0.2em]">Select a subject to start learning</p>
-                        </div>
-                      </div>
-                    )}
-                    {messages.map((msg, idx) => (
-                      <motion.div
-                        key={msg.id}
-                        layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, ease: "easeOut" }}
-                        className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                <div className="space-y-6 py-10">
+                  {messages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                      <motion.div 
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.5 }}
+                        className="w-20 h-20 bg-muted rounded-[2rem] flex items-center justify-center text-foreground/20 shadow-inner"
                       >
-                        <div className={`flex flex-col max-w-[85%] gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                          <div className={`px-5 py-3.5 rounded-2xl border transition-all relative group/msg ${
-                            msg.role === "user" 
-                              ? "bg-[#F5F5F5] dark:bg-[#111111] text-[#000000] dark:text-[#FFFFFF] border-transparent shadow-sm" 
-                              : "bg-background text-foreground border-border shadow-sm"
-                          }`}>
-                            <div className={cn(
-                              "markdown-body prose prose-sm max-w-none",
-                              msg.role === "user" 
-                                ? "text-[17px] font-bold leading-relaxed text-[#000000] dark:text-[#FFFFFF] prose-p:text-[#000000] dark:prose-p:text-[#FFFFFF] prose-headings:text-[#000000] dark:prose-headings:text-[#FFFFFF] prose-strong:text-[#000000] dark:prose-strong:text-[#FFFFFF]" 
-                                : "prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground leading-relaxed"
-                            )}>
-                              {msg.attachments && msg.attachments.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-3">
-                                  {msg.attachments.map((file, fIdx) => (
-                                    <div key={fIdx} className="relative group">
-                                      {file.preview ? (
-                                        <img 
-                                          src={file.preview} 
-                                          alt={file.name} 
-                                          className="w-24 h-24 object-cover rounded-xl border-2 border-border shadow-sm"
-                                          referrerPolicy="no-referrer"
-                                        />
-                                      ) : (
-                                        <div className="w-24 h-24 flex flex-col items-center justify-center bg-muted rounded-xl border-2 border-border p-2 text-center">
-                                          {file.type.includes('pdf') ? <FileIcon className="w-8 h-8 mb-1" /> : <Paperclip className="w-8 h-8 mb-1" />}
-                                          <span className="text-[8px] font-bold truncate w-full">{file.name}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {msg.isTyping ? (
-                                <TypingText 
-                                  text={msg.content} 
-                                  onComplete={() => {
-                                    setChats(prev => prev.map(c => {
-                                      if (c.id === activeChatId) {
-                                        return {
-                                          ...c,
-                                          messages: c.messages.map(m => m.id === msg.id ? { ...m, isTyping: false } : m)
-                                        };
-                                      }
-                                      return c;
-                                    }));
-                                  }} 
-                                />
-                              ) : (
-                                <Suspense fallback={<div className="animate-pulse bg-muted h-4 w-full rounded" />}>
-                                  <Suspense fallback={<div>Loading...</div>}>
-                                    <ReactMarkdown rehypePlugins={[rehypeRaw as any]}>{msg.content}</ReactMarkdown>
-                                  </Suspense>
-                                </Suspense>
-                              )}
-                            </div>
-                            
-                            {msg.role === "model" && !msg.isTyping && (
-                              <div className="absolute -right-12 top-0 opacity-0 group-hover/msg:opacity-100 transition-opacity flex flex-col gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={cn(
-                                    "h-8 w-8 rounded-full bg-background border border-border shadow-sm",
-                                    isSpeaking === msg.id && "text-primary border-primary"
-                                  )}
-                                  onClick={() => speakText(msg.content, msg.id)}
-                                >
-                                  {isSpeaking === msg.id ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          {msg.status === "error" && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={handleRetry}
-                              className="mt-2 text-xs font-bold border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"
-                            >
-                              <RefreshCw className="w-3 h-3 mr-2" />
-                              Retry Request
-                            </Button>
-                          )}
-
-                          {msg.role === "model" && idx === messages.length - 1 && !msg.isTyping && msg.status !== "error" && relatedTopics.length > 0 && (
-                            <motion.div 
-                              initial={{ opacity: 0, y: 5 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="mt-2 flex flex-wrap gap-2"
-                            >
-                              {relatedTopics.map((topic) => (
-                                <button 
-                                  key={topic} 
-                                  className="bg-background hover:bg-muted border border-border px-4 py-1.5 rounded-full text-[10px] font-bold transition-all text-foreground"
-                                  onClick={() => handleSend(`Tell me more about ${topic}`)}
-                                >
-                                  {topic}
-                                </button>
-                              ))}
-                            </motion.div>
-                          )}
-                        </div>
+                        <BrainCircuit className="w-10 h-10" />
                       </motion.div>
-                    ))}
-                  </motion.div>
-                </AnimatePresence>
+                      <div className="space-y-2">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">GenGenius</h2>
+                        <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-[0.2em]">Select a subject to start learning</p>
+                      </div>
+                    </div>
+                  )}
+                  {renderedMessages.map((msg, idx) => (
+                    <ChatMessage 
+                      key={msg.id}
+                      msg={msg}
+                      idx={idx}
+                      messagesCount={renderedMessages.length}
+                      activeChatId={activeChatId}
+                      setChats={setChats}
+                      isSpeaking={isSpeaking}
+                      speakText={speakText}
+                      handleRetry={() => handleSend(msg.content)}
+                      handleSend={handleSend}
+                      relatedTopics={relatedTopics}
+                    />
+                  ))}
+                  
+                  {streamingMessage && (
+                    <ChatMessage 
+                      msg={streamingMessage}
+                      idx={renderedMessages.length}
+                      messagesCount={renderedMessages.length + 1}
+                      activeChatId={activeChatId}
+                      setChats={setChats}
+                      isSpeaking={isSpeaking}
+                      speakText={speakText}
+                      handleRetry={() => {}}
+                      handleSend={handleSend}
+                      relatedTopics={[]}
+                    />
+                  )}
+                </div>
                 
-                {isLoading && (
-                  <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
+                {isLoading && !streamingMessage && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    className="flex justify-start"
+                  >
                     <div className="flex flex-col space-y-2">
                       <div className="flex items-center space-x-2 px-5 py-3 bg-muted/30 rounded-2xl border border-border/50">
                         <div className="flex space-x-1.5">
-                          <motion.div 
-                            animate={{ scale: [1, 1.2, 1] }}
-                            transition={{ repeat: Infinity, duration: 1 }}
-                            className="w-1.5 h-1.5 bg-foreground/40 rounded-full" 
-                          />
-                          <motion.div 
-                            animate={{ scale: [1, 1.2, 1] }}
-                            transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
-                            className="w-1.5 h-1.5 bg-foreground/40 rounded-full" 
-                          />
-                          <motion.div 
-                            animate={{ scale: [1, 1.2, 1] }}
-                            transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
-                            className="w-1.5 h-1.5 bg-foreground/40 rounded-full" 
-                          />
+                          {[0, 1, 2].map((i) => (
+                            <motion.div 
+                              key={i}
+                              animate={{ 
+                                scale: [1, 1.5, 1],
+                                opacity: [0.4, 1, 0.4]
+                              }}
+                              transition={{ 
+                                repeat: Infinity, 
+                                duration: 1, 
+                                delay: i * 0.2,
+                                ease: "easeInOut"
+                              }}
+                              className="w-1.5 h-1.5 bg-primary rounded-full" 
+                            />
+                          ))}
                         </div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 ml-2">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary/60 ml-2">
                           Genius is thinking...
                         </span>
                       </div>
@@ -1714,164 +2060,22 @@ export default function App() {
 
         {/* Input Area - Hidden in Assistant Mode */}
         {!isAssistantActive && (
-          <div className="p-6 bg-background z-30">
-          <div className="max-w-2xl mx-auto space-y-4">
-            {attachedFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-2xl border-2 border-dashed border-border">
-                {attachedFiles.map((file, idx) => (
-                  <div key={idx} className="relative group">
-                    {file.preview ? (
-                      <img 
-                        src={file.preview} 
-                        alt={file.name} 
-                        className="w-16 h-16 object-cover rounded-xl border-2 border-border"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 flex flex-col items-center justify-center bg-muted rounded-xl border-2 border-border p-1 text-center">
-                        {file.type.includes('pdf') ? <FileIcon className="w-6 h-6 mb-1" /> : <Paperclip className="w-6 h-6 mb-1" />}
-                        <span className="text-[8px] font-bold truncate w-full">{file.name}</span>
-                      </div>
-                    )}
-                    <button 
-                      onClick={() => removeFile(idx)}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2 max-w-2xl mx-auto mb-2">
-              {QUICK_ACTIONS.map((action) => (
-                <Button
-                  key={action.name}
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-[10px] font-bold uppercase tracking-wider h-8 border-border hover:bg-muted"
-                  onClick={() => handleTaskAction(action.prompt)}
-                >
-                  <action.icon className="w-3 h-3 mr-2" />
-                  {action.name}
-                </Button>
-              ))}
-            </div>
-
-            <div className="relative flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <input
-                  type="file"
-                  id="file-upload"
-                  className="hidden"
-                  multiple
-                  accept="image/*,.pdf,.txt"
-                  onChange={handleFileChange}
-                />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-12 w-12 rounded-xl hover:bg-muted text-foreground"
-                        onClick={() => document.getElementById('file-upload')?.click()}
-                      >
-                        <Paperclip className="w-6 h-6" />
-                      </Button>
-                    } />
-                    <TooltipContent>Attach Files</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          "h-12 w-12 rounded-xl hover:bg-muted transition-all",
-                          isAssistantActive ? "text-primary bg-primary/10" : "text-foreground"
-                        )}
-                        onClick={() => {
-                          if (isAssistantActive && isListening) {
-                            recognitionRef.current?.stop();
-                            setIsListening(false);
-                          }
-                          setIsAssistantActive(!isAssistantActive);
-                        }}
-                      >
-                        <Sparkles className={cn("w-6 h-6", isAssistantActive && "animate-pulse")} />
-                      </Button>
-                    } />
-                    <TooltipContent>{isAssistantActive ? "Exit Genius Assistant" : "Talk to Genius Assistant"}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                {!isAssistantActive && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger render={
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            "h-12 w-12 rounded-xl hover:bg-muted transition-all",
-                            isListening ? "text-red-500 bg-red-50 dark:bg-red-900/20" : "text-foreground"
-                          )}
-                          onClick={toggleListening}
-                        >
-                          {isListening ? <StopCircle className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
-                        </Button>
-                      } />
-                      <TooltipContent>{isListening ? "Stop Listening" : "Voice Input"}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-
-              <div className="relative flex-1">
-                <Input
-                  placeholder="Ask anything..."
-                  className="bg-background border-2 border-border focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white text-lg h-16 rounded-2xl pr-14 font-bold placeholder:text-foreground/40 text-foreground shadow-md"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
-                />
-                {isLoading ? (
-                  <Button 
-                    size="icon" 
-                    variant="ghost"
-                    className="absolute right-2 top-2 h-12 w-12 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-all"
-                    onClick={stopGeneration}
-                  >
-                    <Square className="w-5 h-5 fill-current" />
-                  </Button>
-                ) : (
-                  <Button 
-                    size="icon" 
-                    variant="ghost"
-                    className="absolute right-2 top-2 h-12 w-12 rounded-xl hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-all text-foreground"
-                    onClick={() => handleSend()}
-                    disabled={!input.trim() && attachedFiles.length === 0}
-                  >
-                    <Send className="w-6 h-6" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            
-            {isLoading && (
-              <div className="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-foreground/40">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Generating Response...
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+          <ChatInput 
+            onSend={handleSend}
+            isLoading={isLoading}
+            isAssistantActive={isAssistantActive}
+            setIsAssistantActive={setIsAssistantActive}
+            isListening={isListening}
+            toggleListening={toggleListening}
+            handleFileChange={handleFileChange}
+            attachedFiles={attachedFiles}
+            removeFile={removeFile}
+            handleTaskAction={handleTaskAction}
+            stopGeneration={stopGeneration}
+            recognitionRef={recognitionRef}
+            setIsListening={setIsListening}
+          />
+        )}
     </main>
 
       {/* Lazy Loaded Dialogs */}
@@ -1923,6 +2127,8 @@ export default function App() {
     </div>
   );
 }
+
+export default App;
 
 
 
