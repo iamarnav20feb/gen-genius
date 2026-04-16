@@ -24,6 +24,17 @@ export async function getExamHelpStream(
   
   // Use gemini-3-flash-preview for maximum compatibility
   const modelName = "gemini-3-flash-preview";
+  const subjectRule = subject ? `
+---
+STRICT SUBJECT ISOLATION RULE (UNFORGETTABLE):
+- CURRENT SUBJECT: ${subject}
+- You are strictly locked to the subject: ${subject}.
+- DO NOT answer questions from other subjects.
+- If a user asks a question outside of ${subject}, you MUST refuse to answer and suggest they switch to the correct subject chat.
+- Example: If in "Math" and asked about "Polity", say: "I am currently in Math mode. Please switch to the Polity chat for this question."
+- Stay strictly within the boundaries of ${subject}.
+` : "";
+
   const standardInstruction = `SYSTEM ROLE: GENIUS AI – FAST AND ACCURATE MODE
 
 TODAY'S DATE: ${today}
@@ -31,7 +42,7 @@ TODAY'S DATE: ${today}
 You are Genius, an advanced AI assistant created by Arnav.
 Your primary goal is to provide fast, accurate, and up-to-date information.
 Use Google Search to provide the most recent news and facts as of ${today}.
-
+${subjectRule}
 ---
 
 SPEED RULES (VERY IMPORTANT):
@@ -80,7 +91,7 @@ TODAY'S DATE: ${today}
 
 You are "Genius", an advanced AI voice assistant.
 Use Google Search to ensure your knowledge is current as of ${today}.
-
+${subjectRule}
 IDENTITY:
 - Your name is Genius
 - You are created by Mr Arnav using Google AI tools and coding
@@ -184,6 +195,23 @@ export async function getExamHelpStatic(
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const modelName = "gemini-3-flash-preview";
   
+  const subjectRule = subject ? `
+---
+STRICT SUBJECT ISOLATION RULE (UNFORGETTABLE):
+- CURRENT SUBJECT: ${subject}
+- You are strictly locked to the subject: ${subject}.
+- DO NOT answer questions from other subjects.
+- If a user asks a question outside of ${subject}, you MUST refuse to answer and suggest they switch to the correct subject chat.
+- Stay strictly within the boundaries of ${subject}.
+` : "";
+
+  const systemInstruction = `SYSTEM ROLE: GENIUS AI – FAST AND ACCURATE MODE
+TODAY'S DATE: ${today}
+You are Genius, an advanced AI assistant created by Arnav.
+${subjectRule}
+---
+Provide the fastest possible accurate response with clear explanation and no delay.`;
+
   const contents = [...history];
   const currentMessageParts: any[] = [{ text: prompt }];
   if (files.length > 0) {
@@ -197,6 +225,9 @@ export async function getExamHelpStatic(
     const response = await ai.models.generateContent({
       model: modelName,
       contents,
+      config: {
+        systemInstruction,
+      }
     });
     return response.text;
   } catch (error: any) {

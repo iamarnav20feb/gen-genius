@@ -229,13 +229,6 @@ const SUBJECTS = [
   { name: "Current Affairs", icon: Newspaper, color: "text-orange-500", bg: "bg-orange-50" },
 ];
 
-const QUICK_ACTIONS = [
-  { name: "MCQs", prompt: "Generate 5 MCQs on ", icon: HelpCircle },
-  { name: "Notes", prompt: "Give structured revision notes on ", icon: FileText },
-  { name: "Latest News", prompt: "What are the most important current affairs for exams from the last 24 hours?", icon: Newspaper },
-  { name: "Quiz", prompt: "Start a quiz on ", icon: BrainCircuit },
-];
-
 interface UserProfile {
   name: string;
   email: string;
@@ -538,21 +531,6 @@ const ChatInput = memo(({
             ))}
           </div>
         )}
-
-        <div className="flex flex-wrap gap-2 max-w-2xl mx-auto mb-2">
-          {QUICK_ACTIONS.map((action) => (
-            <Button
-              key={action.name}
-              variant="outline"
-              size="sm"
-              className="rounded-full text-[10px] font-bold uppercase tracking-wider h-8 border-border hover:bg-muted"
-              onClick={() => handleTaskAction(action.prompt)}
-            >
-              <action.icon className="w-3 h-3 mr-2" />
-              {action.name}
-            </Button>
-          ))}
-        </div>
 
         <div className="relative flex items-center gap-2">
           <div className="flex items-center gap-1">

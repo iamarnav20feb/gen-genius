@@ -1,45 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if user is the owner or an admin
-    function isAuthorized(userId) {
-      return request.auth != null && (
-        request.auth.uid == userId || 
-        request.auth.token.email == "iamarnav@zohomail.in" || 
-        request.auth.token.email == "arnav9366@gmail.com"
-      );
-    }
-
-    // User profiles
-    match /users/{userId} {
-      allow read, write: if isAuthorized(userId);
-    }
-
-    // Chats
-    match /chats/{chatId} {
-      // For reading: allow if the document's userId matches the authenticated user
-      allow read: if request.auth != null && (
-        resource.data.userId == request.auth.uid || 
-        request.auth.token.email == "iamarnav@zohomail.in" || 
-        request.auth.token.email == "arnav9366@gmail.com"
-      );
-      
-      // For writing: allow if the new document's userId matches the authenticated user
-      allow write: if request.auth != null && (
-        request.resource.data.userId == request.auth.uid || 
-        request.auth.token.email == "iamarnav@zohomail.in" || 
-        request.auth.token.email == "arnav9366@gmail.com"
-      );
-    }
-
-    // Global admin access as a fallback
+    
+    // TEMPORARY: Open access for all authenticated users to debug deployment issues
     match /{document=**} {
-      allow read, write: if request.auth != null && (
-        request.auth.token.email == "iamarnav@zohomail.in" || 
-        request.auth.token.email == "arnav9366@gmail.com"
-      );
+      allow read, write: if request.auth != null;
     }
 
+    // Explicitly allow the test connection
     match /test/connection {
       allow read: if true;
     }

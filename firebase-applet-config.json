@@ -1,10 +1,11 @@
 {
-  "projectId": "generation-genius-5134e",
-  "appId": "1:309138548373:web:abb0cfb838e6a4371fdd9c",
   "apiKey": "AIzaSyDeto86smFKHzhI_MvgY_HEEGaQZmdcTVc",
   "authDomain": "generation-genius-5134e.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
+  "databaseURL": "https://generation-genius-5134e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  "projectId": "generation-genius-5134e",
   "storageBucket": "generation-genius-5134e.firebasestorage.app",
   "messagingSenderId": "309138548373",
-  "measurementId": ""
+  "appId": "1:309138548373:web:cc0a07cdd057b1421fdd9c",
+  "measurementId": "G-SV12R9XSNT",
+  "firestoreDatabaseId": "(default)"
 }
