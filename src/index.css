@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Redefine @property rules with correct syntax to avoid invalid initial-value warnings */
 @property --tw-enter-opacity { syntax: "<number>"; inherits: false; initial-value: 1; }

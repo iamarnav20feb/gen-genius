@@ -58,7 +58,10 @@ import {
   Languages,
   MicOff,
   Waves,
-  Power
+  Power,
+  Cloud,
+  ShieldCheck,
+  CloudOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -95,13 +98,92 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getExamHelpStream } from "./services/geminiService";
-import { auth, signInWithGoogle, logOut } from "./lib/firebase";
+import { getExamHelpStream, getExamHelpStatic } from "./services/geminiService";
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  serverTimestamp,
+  orderBy,
+  getDocFromServer
+} from "firebase/firestore";
+import { db, auth, signInWithGoogle, logOut } from "./lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { cn } from "@/lib/utils";
 
-// Lazy load heavy components
-const ReactMarkdown = lazy(() => import("react-markdown"));
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+// Helper to sanitize data for Firestore (remove undefined values)
+const sanitizeForFirestore = (data: any): any => {
+  if (Array.isArray(data)) {
+    return data.map(sanitizeForFirestore);
+  } else if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
+    const sanitized: any = {};
+    Object.keys(data).forEach(key => {
+      const value = data[key];
+      if (value !== undefined) {
+        sanitized[key] = sanitizeForFirestore(value);
+      }
+    });
+    return sanitized;
+  }
+  return data;
+};
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 const SettingsDialog = lazy(() => import("./components/SettingsDialog"));
 const RecycleBinDialog = lazy(() => import("./components/RecycleBinDialog"));
@@ -127,6 +209,7 @@ interface Message {
 
 interface Chat {
   id: string;
+  userId: string;
   title: string;
   subject?: string;
   messages: Message[];
@@ -155,7 +238,9 @@ const QUICK_ACTIONS = [
 
 interface UserProfile {
   name: string;
+  email: string;
   bio: string;
+  photoURL?: string;
 }
 
 const GeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
@@ -256,9 +341,7 @@ const ChatMessage = memo(({
                 <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-2 h-2 bg-primary rounded-full" />
               </div>
             ) : (
-              <Suspense fallback={<div className="animate-pulse bg-muted h-4 w-full rounded" />}>
-                <ReactMarkdown rehypePlugins={[rehypeRaw as any]}>{msg.content}</ReactMarkdown>
-              </Suspense>
+              <ReactMarkdown rehypePlugins={[rehypeRaw as any]}>{msg.content}</ReactMarkdown>
             )}
           </div>
           
@@ -399,7 +482,9 @@ const ChatInput = memo(({
   handleTaskAction,
   stopGeneration,
   recognitionRef,
-  setIsListening
+  setIsListening,
+  input,
+  setInput
 }: {
   onSend: (text: string) => void,
   isLoading: boolean,
@@ -413,14 +498,13 @@ const ChatInput = memo(({
   handleTaskAction: (prompt: string) => void,
   stopGeneration: () => void,
   recognitionRef: React.RefObject<any>,
-  setIsListening: (listening: boolean) => void
+  setIsListening: (listening: boolean) => void,
+  input: string,
+  setInput: (val: string) => void
 }) => {
-  const [localInput, setLocalInput] = useState("");
-
   const handleSubmit = () => {
-    if ((localInput.trim() || attachedFiles.length > 0) && !isLoading) {
-      onSend(localInput);
-      setLocalInput("");
+    if ((input.trim() || attachedFiles.length > 0) && !isLoading) {
+      onSend(input);
     }
   };
 
@@ -524,8 +608,18 @@ const ChatInput = memo(({
                 <TooltipContent>{isAssistantActive ? "Exit Genius Assistant" : "Talk to Genius Assistant"}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          </div>
 
-            {!isAssistantActive && (
+          <div className="relative flex-1">
+            <Input
+              placeholder="Ask anything..."
+              className="bg-background border-2 border-border focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white text-lg h-16 rounded-2xl pr-28 font-bold placeholder:text-foreground/40 text-foreground shadow-md"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSubmit())}
+            />
+            
+            <div className="absolute right-2 top-2 flex items-center gap-1">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger render={
@@ -546,37 +640,28 @@ const ChatInput = memo(({
                   <TooltipContent>{isListening ? "Stop Listening" : "Voice Input"}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            )}
-          </div>
 
-          <div className="relative flex-1">
-            <Input
-              placeholder="Ask anything..."
-              className="bg-background border-2 border-border focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white text-lg h-16 rounded-2xl pr-14 font-bold placeholder:text-foreground/40 text-foreground shadow-md"
-              value={localInput}
-              onChange={(e) => setLocalInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSubmit())}
-            />
-            {isLoading ? (
-              <Button 
-                size="icon" 
-                variant="ghost"
-                className="absolute right-2 top-2 h-12 w-12 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-all"
-                onClick={stopGeneration}
-              >
-                <Square className="w-5 h-5 fill-current" />
-              </Button>
-            ) : (
-              <Button 
-                size="icon" 
-                variant="ghost"
-                className="absolute right-2 top-2 h-12 w-12 rounded-xl hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-all text-foreground"
-                onClick={handleSubmit}
-                disabled={!localInput.trim() && attachedFiles.length === 0}
-              >
-                <Send className="w-6 h-6" />
-              </Button>
-            )}
+              {isLoading ? (
+                <Button 
+                  size="icon" 
+                  variant="ghost"
+                  className="h-12 w-12 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-all"
+                  onClick={stopGeneration}
+                >
+                  <Square className="w-5 h-5 fill-current" />
+                </Button>
+              ) : (
+                <Button 
+                  size="icon" 
+                  variant="ghost"
+                  className="h-12 w-12 rounded-xl hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-all text-foreground"
+                  onClick={handleSubmit}
+                  disabled={!input.trim() && attachedFiles.length === 0}
+                >
+                  <Send className="w-6 h-6" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         
@@ -593,32 +678,271 @@ const ChatInput = memo(({
 
 ChatInput.displayName = "ChatInput";
 
+interface SidebarContentProps {
+  isMobile?: boolean;
+  isSidebarCollapsed: boolean;
+  setIsSidebarCollapsed: (collapsed: boolean) => void;
+  user: FirebaseUser | null;
+  isSyncing: boolean;
+  activeChat: Chat | null;
+  activeChats: Chat[];
+  activeChatId: string | null;
+  createNewChat: (initialMessage?: Message, subject?: string) => Chat;
+  setIsSidebarOpen: (open: boolean) => void;
+  setActiveChatId: (id: string | null) => void;
+  setChatToDelete: (id: string | null) => void;
+  setIsDeleteDialogOpen: (open: boolean) => void;
+  handleGoogleLogin: () => void;
+  loginError: string | null;
+  setIsSettingsOpen: (open: boolean) => void;
+  handleLogout: () => void;
+}
+
+const SidebarContent = memo(({ 
+  isMobile = false,
+  isSidebarCollapsed,
+  setIsSidebarCollapsed,
+  user,
+  isSyncing,
+  activeChat,
+  activeChats,
+  activeChatId,
+  createNewChat,
+  setIsSidebarOpen,
+  setActiveChatId,
+  setChatToDelete,
+  setIsDeleteDialogOpen,
+  handleGoogleLogin,
+  loginError,
+  setIsSettingsOpen,
+  handleLogout
+}: SidebarContentProps) => {
+  const isCollapsed = !isMobile && isSidebarCollapsed;
+
+  return (
+    <TooltipProvider delay={0}>
+      <div className="flex flex-col h-full bg-white dark:bg-[#0a0a0a] border-r dark:border-white/5 transition-all duration-300 ease-in-out">
+        {/* Sidebar Header */}
+        <div className={cn("p-6", isCollapsed && "p-4 flex flex-col items-center")}>
+          <div className="flex items-center justify-between w-full">
+            <AnimatePresence mode="wait">
+              {!isCollapsed ? (
+                <motion.div 
+                  key="full-logo"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center justify-between w-full overflow-hidden"
+                >
+                  <div className="flex flex-col">
+                    <GeniusLogo />
+                    {user && (
+                      <div className="flex items-center mt-1 space-x-1.5">
+                        {isSyncing ? (
+                          <>
+                            <RefreshCw className="w-2.5 h-2.5 text-blue-500 animate-spin" />
+                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-tighter">Syncing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
+                            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-tighter">Cloud Secured</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg hover:bg-muted"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                  >
+                    <PanelLeftClose className="w-4 h-4 text-foreground/50" />
+                  </Button>
+                </motion.div>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger render={
+                    <motion.div 
+                      key="collapsed-logo"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex flex-col items-center space-y-4"
+                    >
+                      <div 
+                        className="cursor-pointer"
+                        onClick={() => setIsSidebarCollapsed(false)}
+                      >
+                        <GeniusLogo collapsed />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg hover:bg-muted"
+                        onClick={() => setIsSidebarCollapsed(false)}
+                      >
+                        <PanelLeftOpen className="w-4 h-4 text-foreground/50" />
+                      </Button>
+                    </motion.div>
+                  } />
+                  <TooltipContent side="right">Expand Sidebar</TooltipContent>
+                </Tooltip>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Sidebar Scrollable Area */}
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={{
+            visible: {
+              transition: {
+                staggerChildren: 0.05
+              }
+            }
+          }}
+          className="flex-1 overflow-y-auto px-3 space-y-2 pb-6 custom-scrollbar"
+        >
+          {/* Subjects Section */}
+          <div className="space-y-1">
+            {SUBJECTS.map((sub) => (
+              <Tooltip key={sub.name}>
+                <TooltipTrigger render={
+                  <motion.div
+                    variants={{
+                      hidden: { opacity: 0, x: -10 },
+                      visible: { opacity: 1, x: 0 }
+                    }}
+                    whileHover={{ x: 4, backgroundColor: "var(--muted)" }}
+                    whileTap={{ scale: 0.98 }}
+                    className="rounded-lg"
+                  >
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "w-full justify-start hover:bg-transparent group transition-all duration-300 rounded-lg h-10 px-3 text-foreground relative overflow-hidden",
+                        activeChat?.subject === sub.name 
+                          ? "bg-black dark:bg-white text-white dark:text-black shadow-md" 
+                          : "text-foreground",
+                        isCollapsed && "px-0 justify-center"
+                      )}
+                      onClick={() => {
+                        createNewChat(undefined, sub.name);
+                        setIsSidebarOpen(false);
+                      }}
+                    >
+                      <sub.icon className={cn(
+                        "w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110", 
+                        !isCollapsed && "mr-3", 
+                        activeChat?.subject === sub.name ? "text-current" : sub.color
+                      )} />
+                      {!isCollapsed && (
+                        <span className="font-bold text-xs">{sub.name}</span>
+                      )}
+                      {activeChat?.subject === sub.name && (
+                        <motion.div 
+                          layoutId="active-subject-glow"
+                          className="absolute inset-0 bg-white/10 dark:bg-black/10 pointer-events-none"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      )}
+                    </Button>
+                  </motion.div>
+                } />
+                {isCollapsed && <TooltipContent side="right">{sub.name}</TooltipContent>}
+              </Tooltip>
+            ))}
+          </div>
+
+          {/* History Section */}
+          <div className="pt-2 space-y-0.5">
+            {activeChats.filter(c => !c.subject).map((chat) => (
+              <SidebarItem 
+                key={chat.id}
+                chat={chat}
+                activeChatId={activeChatId}
+                isCollapsed={isCollapsed}
+                setActiveChatId={setActiveChatId}
+                setIsSidebarOpen={setIsSidebarOpen}
+                setChatToDelete={setChatToDelete}
+                setIsDeleteDialogOpen={setIsDeleteDialogOpen}
+              />
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Sidebar Footer (Settings & Profile) */}
+        <div className="p-4 mt-auto border-t border-border space-y-2">
+          <p className="text-[8px] text-center text-foreground/30 font-bold uppercase tracking-widest mb-2">made by Arnav</p>
+          {!user ? (
+            <div className="space-y-2">
+              {loginError && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-2 bg-destructive/10 border border-destructive/20 rounded-lg text-[10px] text-destructive font-medium leading-tight"
+                >
+                  {loginError}
+                </motion.div>
+              )}
+              <Button 
+                variant="outline" 
+                className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest border-border text-foreground", isCollapsed && "w-10 p-0 justify-center")}
+                onClick={handleGoogleLogin}
+              >
+                <LogIn className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
+                {!isCollapsed && <span>Login</span>}
+              </Button>
+            </div>
+          ) : (
+            <div className={cn("flex items-center gap-3 p-2 rounded-xl bg-muted border border-border", isCollapsed && "p-1 justify-center")}>
+              <Avatar className="w-8 h-8 rounded-lg">
+                <AvatarImage src={user.photoURL || ""} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">{user.displayName?.charAt(0) || "U"}</AvatarFallback>
+              </Avatar>
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold truncate text-foreground">{user.displayName}</p>
+                  <p className="text-[9px] text-foreground/70 truncate">{user.email}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <Button 
+            variant="ghost" 
+            className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-muted text-foreground", isCollapsed && "w-10 p-0 justify-center")}
+            onClick={() => setIsSettingsOpen(true)}
+          >
+            <Settings className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
+            {!isCollapsed && <span>Settings</span>}
+          </Button>
+        </div>
+      </div>
+    </TooltipProvider>
+  );
+});
+
+SidebarContent.displayName = "SidebarContent";
+
 function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem("gen_genius_profile");
-    return saved ? JSON.parse(saved) : { name: "", bio: "" };
+    return saved ? JSON.parse(saved) : { name: "", email: "", bio: "", photoURL: "" };
   });
 
-  const [chats, setChats] = useState<Chat[]>(() => {
-    const saved = localStorage.getItem("gen_genius_chats");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed.map((chat: any) => ({
-          ...chat,
-          createdAt: new Date(chat.createdAt),
-          messages: chat.messages.map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp)
-          }))
-        }));
-      } catch (e) {
-        console.error("Failed to parse chats", e);
-      }
-    }
-    return [];
-  });
+  const [chats, setChats] = useState<Chat[]>([]);
+  const chatsRef = useRef<Chat[]>(chats);
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   const [activeChatId, setActiveChatId] = useState<string | null>(() => {
     return localStorage.getItem("gen_genius_active_chat");
@@ -650,6 +974,7 @@ function App() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState<string | null>(null);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isAssistantActive, setIsAssistantActive] = useState(false);
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -829,28 +1154,157 @@ function App() {
     window.speechSynthesis.speak(utterance);
   }, [isSpeaking, assistantLanguage, isAssistantActive, isListening, isLoading]);
 
-  // Auth Listener
+  // Auth Listener and Firestore Sync
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (currentUser && !profile.name) {
-        setProfile(prev => ({ ...prev, name: currentUser.displayName || "" }));
+      setIsAuthReady(true);
+      
+      if (currentUser) {
+        setLoginError(null);
+        // Sync Profile
+        const userDocRef = doc(db, "users", currentUser.uid);
+        try {
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            setProfile(userDoc.data() as UserProfile);
+          } else {
+            const newProfile = {
+              uid: currentUser.uid,
+              name: currentUser.displayName || "",
+              email: currentUser.email || "",
+              photoURL: currentUser.photoURL || "",
+              bio: "",
+              createdAt: new Date().toISOString()
+            };
+            setIsSyncing(true);
+            await setDoc(userDocRef, newProfile);
+            setIsSyncing(false);
+            setProfile({ 
+              name: newProfile.name, 
+              email: newProfile.email, 
+              bio: "", 
+              photoURL: newProfile.photoURL 
+            });
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
+        }
+      } else {
+        setChats([]);
+        setProfile({ name: "", email: "", bio: "", photoURL: "" });
       }
     });
     return () => unsubscribe();
-  }, [profile.name]);
+  }, []);
 
-  // Persistence Effects
+  // Real-time Chats Sync
   useEffect(() => {
-    localStorage.setItem("gen_genius_profile", JSON.stringify(profile));
-  }, [profile]);
+    if (!user || !isAuthReady) return;
+
+    const chatsQuery = query(
+      collection(db, "chats"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(chatsQuery, (snapshot) => {
+      const updatedChats = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          messages: (data.messages || []).map((m: any) => ({
+            ...m,
+            timestamp: m.timestamp?.toDate() || new Date()
+          }))
+        } as Chat;
+      });
+
+      setChats(prev => {
+        // 1. Start with updated chats from Firestore
+        const merged = updatedChats.map(newChat => {
+          const localChat = prev.find(c => c.id === newChat.id);
+          if (!localChat) return newChat;
+
+          // Merge messages: keep local messages that haven't reached Firestore yet
+          const mergedMessages = [...newChat.messages];
+          localChat.messages.forEach(localMsg => {
+            if (!mergedMessages.some(m => m.id === localMsg.id)) {
+              mergedMessages.push(localMsg);
+            }
+          });
+
+          // Sort by timestamp
+          mergedMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+          return {
+            ...newChat,
+            messages: mergedMessages
+          };
+        });
+
+        // 2. Keep chats that are ONLY in local state (not yet in Firestore)
+        // This is critical for brand new chats that are still being saved
+        const localOnly = prev.filter(localChat => 
+          !updatedChats.some(newChat => newChat.id === localChat.id) &&
+          // Only keep them if they were created recently (last 60 seconds)
+          // or if they have messages (meaning they are active)
+          (new Date().getTime() - localChat.createdAt.getTime() < 60000 || localChat.messages.length > 0)
+        );
+
+        // 3. Combine and ensure uniqueness
+        const combined = [...merged];
+        localOnly.forEach(lc => {
+          if (!combined.some(c => c.id === lc.id)) {
+            combined.push(lc);
+          }
+        });
+
+        return combined.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "chats");
+    });
+
+    return () => unsubscribe();
+  }, [user, isAuthReady]);
+
+  // Test Connection
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. ");
+        }
+      }
+    }
+    testConnection();
+  }, []);
+
+  // Persistence Effects (Local storage as fallback/cache)
+  useEffect(() => {
+    if (profile.name) {
+      localStorage.setItem("gen_genius_profile", JSON.stringify(profile));
+      if (user) {
+        setIsSyncing(true);
+        const updateData = sanitizeForFirestore({ ...profile, uid: user.uid });
+        setDoc(doc(db, "users", user.uid), updateData, { merge: true })
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}`))
+          .finally(() => setIsSyncing(false));
+      }
+    }
+  }, [profile, user]);
 
   useEffect(() => {
     localStorage.setItem("gen_genius_sidebar_collapsed", String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
 
   const activeChat = useMemo(() => {
-    return chats.find(c => c.id === activeChatId && !c.deletedAt) || null;
+    const chat = chats.find(c => c.id === activeChatId && !c.deletedAt);
+    return chat || null;
   }, [chats, activeChatId]);
 
   const activeChats = useMemo(() => {
@@ -882,10 +1336,12 @@ function App() {
 
   // Debounce localStorage updates to prevent blocking the main thread during streaming
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      localStorage.setItem("gen_genius_chats", JSON.stringify(chats));
-    }, 1000);
-    return () => clearTimeout(timeout);
+    if (chats.length > 0) {
+      const timeout = setTimeout(() => {
+        localStorage.setItem("gen_genius_chats", JSON.stringify(chats));
+      }, 1000);
+      return () => clearTimeout(timeout);
+    }
   }, [chats]);
 
   useEffect(() => {
@@ -949,28 +1405,49 @@ function App() {
   const createNewChat = useCallback((initialMessage?: Message, subject?: string) => {
     // If it's a subject session, check if one already exists
     if (subject) {
-      const existingChat = chats.find(c => c.subject === subject && !c.deletedAt);
+      const existingChat = chatsRef.current.find(c => c.subject === subject && !c.deletedAt);
       if (existingChat) {
         setActiveChatId(existingChat.id);
         return existingChat;
       }
     }
 
+    const newChatId = crypto.randomUUID();
     const newChat: Chat = {
-      id: Date.now().toString(),
+      id: newChatId,
+      userId: user?.uid || "anonymous",
       title: subject 
         ? `${subject} Session`
         : (initialMessage 
             ? initialMessage.content.slice(0, 30) + (initialMessage.content.length > 30 ? "..." : "") 
             : "New Session"),
-      subject: subject,
+      subject: subject || null,
       messages: initialMessage ? [initialMessage] : [],
       createdAt: new Date(),
     };
-    setChats(prev => [newChat, ...prev]);
+
+    if (user) {
+      setIsSyncing(true);
+      setDoc(doc(db, "chats", newChatId), sanitizeForFirestore(newChat))
+        .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${newChatId}`))
+        .finally(() => setIsSyncing(false));
+      
+      // Still update local state for immediate feedback
+      setChats(prev => {
+        // Prevent duplicates
+        if (prev.some(c => c.id === newChatId)) return prev;
+        return [newChat, ...prev];
+      });
+    } else {
+      setChats(prev => {
+        if (prev.some(c => c.id === newChatId)) return prev;
+        return [newChat, ...prev];
+      });
+    }
+    
     setActiveChatId(newChat.id);
     return newChat;
-  }, [chats]);
+  }, [user]); // Removed chats dependency
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1031,11 +1508,16 @@ function App() {
     const finalPrompt = text.trim();
     if ((!finalPrompt && attachedFiles.length === 0) || isLoading) return;
 
+    // Clear input immediately to prevent double-sending
+    setInput("");
+    setAttachedFiles([]);
+    setIsLoading(true);
+
     const controller = new AbortController();
     setAbortController(controller);
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: "user",
       content: finalPrompt,
       timestamp: new Date(),
@@ -1050,34 +1532,47 @@ function App() {
       const newChat = createNewChat(userMessage);
       currentChatId = newChat.id;
     } else {
+      // Update locally first for instant feedback
       setChats(prev => prev.map(c => {
         if (c.id === currentChatId) {
           const hasUserMessage = c.messages.some(m => m.role === "user");
           const newTitle = !hasUserMessage ? (finalPrompt || "File Analysis").slice(0, 30) + (finalPrompt.length > 30 ? "..." : "") : c.title;
-          
-          // Limit total messages in memory to 100 for performance
           const updatedMessages = [...c.messages, userMessage];
-          const limitedMessages = updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages;
-          
-          return {
-            ...c,
-            title: newTitle,
-            messages: limitedMessages
-          };
+          return { ...c, title: newTitle, messages: updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages };
         }
         return c;
       }));
+
+      if (user) {
+        const chatRef = doc(db, "chats", currentChatId);
+        // Use a functional update to get the latest messages from Firestore state if possible
+        // or just append to the existing document using arrayUnion if the structure allowed it.
+        // Since we store messages as an array field, we need to be careful.
+        
+        // We'll get the latest messages from our ref to ensure we don't overwrite
+        const latestChat = chatsRef.current.find(c => c.id === currentChatId);
+        if (latestChat) {
+          setIsSyncing(true);
+          const updatedMessages = [...latestChat.messages, userMessage];
+          const limitedMessages = updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages;
+          
+          const updateData = sanitizeForFirestore({
+            messages: limitedMessages,
+            title: !latestChat.messages.some(m => m.role === "user") ? (finalPrompt || "File Analysis").slice(0, 30) + (finalPrompt.length > 30 ? "..." : "") : latestChat.title
+          });
+
+          setDoc(chatRef, updateData, { merge: true })
+            .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${currentChatId}`))
+            .finally(() => setIsSyncing(false));
+        }
+      }
     }
 
     const currentFiles = [...attachedFiles];
-    setInput("");
-    setAttachedFiles([]);
-    setIsLoading(true);
-
-    const aiMessageId = (Date.now() + 1).toString();
+    const aiMessageId = crypto.randomUUID();
 
     try {
-      const chatToUse = chats.find(c => c.id === currentChatId);
+      const chatToUse = chatsRef.current.find(c => c.id === currentChatId);
       const history = chatToUse ? chatToUse.messages.map((m) => ({
         role: m.role,
         parts: [{ text: m.content }],
@@ -1104,16 +1599,32 @@ function App() {
 
       setStreamingMessage(aiMessage);
 
-      for await (const chunk of stream) {
-        if (controller.signal.aborted) break;
-        const chunkText = chunk.text;
-        if (chunkText) {
-          fullResponse += chunkText;
-          
-          // Update streaming message directly - much faster than updating entire chats array
+      console.log("GenGenius: Stream received, starting iteration...");
+      try {
+        for await (const chunk of stream) {
+          if (controller.signal.aborted) break;
+          const chunkText = chunk.text;
+          if (chunkText) {
+            console.log(`GenGenius: Received chunk (${chunkText.length} chars)`);
+            fullResponse += chunkText;
+            setStreamingMessage(prev => prev ? { ...prev, content: fullResponse } : null);
+          }
+        }
+      } catch (streamError) {
+        console.warn("GenGenius: Streaming failed, trying static fallback...", streamError);
+        // Fallback to static if streaming is blocked by network
+        const staticText = await getExamHelpStatic(
+          finalPrompt || "Analyze the attached files.",
+          history,
+          currentSubject,
+          currentFiles.map(f => ({ mimeType: f.type, data: f.data }))
+        );
+        if (staticText) {
+          fullResponse = staticText;
           setStreamingMessage(prev => prev ? { ...prev, content: fullResponse } : null);
         }
       }
+      console.log(`GenGenius: Response finished. Total length: ${fullResponse.length}`);
 
       if (!controller.signal.aborted) {
         const topicsMatch = fullResponse.match(/Related Topics:\s*(.*)/i);
@@ -1130,16 +1641,34 @@ function App() {
           status: "sent"
         };
 
+        // Update locally first
+        let finalMessages: Message[] = [];
         setChats(prev => prev.map(c => {
           if (c.id === currentChatId) {
-            const updatedMessages = [...c.messages, finalAiMessage];
-            return {
-              ...c,
-              messages: updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages
-            };
+            finalMessages = [...c.messages, finalAiMessage];
+            return { ...c, messages: finalMessages.length > 100 ? finalMessages.slice(-100) : finalMessages };
           }
           return c;
         }));
+
+        if (user && currentChatId) {
+          const chatRef = doc(db, "chats", currentChatId);
+          // Use chatsRef to get the latest messages (including the user message sent earlier)
+          const latestChat = chatsRef.current.find(c => c.id === currentChatId);
+          if (latestChat) {
+            setIsSyncing(true);
+            const updatedMessages = [...latestChat.messages, finalAiMessage];
+            const limitedMessages = updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages;
+            
+            const updateData = sanitizeForFirestore({
+              messages: limitedMessages
+            });
+
+            setDoc(chatRef, updateData, { merge: true })
+              .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${currentChatId}`))
+              .finally(() => setIsSyncing(false));
+          }
+        }
         
         setStreamingMessage(null);
 
@@ -1148,40 +1677,77 @@ function App() {
           speakText(cleanResponse, aiMessageId);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof Error && error.name === 'AbortError') {
         console.log("Generation stopped by user");
       } else {
-        console.error(error);
+        console.error("AI Generation Error:", error);
+        
+        let errorContent = "I'm having trouble connecting to my brain right now. 🧠 Please check your connection and try again.";
+        
+        if (error?.status === "RESOURCE_EXHAUSTED" || error?.message?.includes("429") || error?.message?.includes("quota")) {
+          errorContent = "I've reached my temporary limit for free answers. Please wait a minute and try again.";
+        } else if (error?.message?.includes("API key")) {
+          errorContent = "⚠️ **API Key Error:** My connection to the AI is broken. Please ensure the API key is correctly set in the environment.";
+        } else if (error?.message?.includes("fetch") || error?.message?.includes("NetworkError") || error?.message?.includes("Failed to fetch")) {
+          errorContent = "⚠️ **Network Blocked:** I can't reach Google's AI servers. Since you are on a Chromebook, your school or network might be blocking 'generativelanguage.googleapis.com'. Try using a different Wi-Fi or a personal hotspot.";
+        }
+
         const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: aiMessageId,
           role: "model",
-          content: "I'm having trouble connecting to my brain right now. 🧠 Please check your connection and try again. I'm ready when you are!",
+          content: errorContent,
           timestamp: new Date(),
-          status: "error"
+          status: "error",
+          isTyping: false
         };
+
+        // Add the error message to the chat history so the user can see it
         setChats(prev => prev.map(c => {
           if (c.id === currentChatId) {
-            return {
-              ...c,
-              messages: c.messages.map(m => m.id === aiMessageId ? { ...m, isTyping: false, status: "error", content: errorMessage.content } : m)
-            };
+            // Check if the message already exists (unlikely but safe)
+            const exists = c.messages.some(m => m.id === aiMessageId);
+            if (exists) {
+              return {
+                ...c,
+                messages: c.messages.map(m => m.id === aiMessageId ? errorMessage : m)
+              };
+            } else {
+              return {
+                ...c,
+                messages: [...c.messages, errorMessage]
+              };
+            }
           }
           return c;
         }));
+        
+        setStreamingMessage(null);
       }
     } finally {
       setIsLoading(false);
       setAbortController(null);
     }
-  }, [input, attachedFiles, isLoading, activeChatId, activeChat, chats, isAssistantActive, speakText, createNewChat]);
+  }, [input, attachedFiles, isLoading, activeChatId, activeChat, isAssistantActive, speakText, createNewChat]); // Removed chats dependency
 
   const restoreChat = (id: string) => {
-    setChats(prev => prev.map(c => c.id === id ? { ...c, deletedAt: undefined } : c));
+    if (user) {
+      setIsSyncing(true);
+      setDoc(doc(db, "chats", id), { deletedAt: null }, { merge: true })
+        .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${id}`))
+        .finally(() => setIsSyncing(false));
+    } else {
+      setChats(prev => prev.map(c => c.id === id ? { ...c, deletedAt: undefined } : c));
+    }
   };
 
   const permanentlyDeleteChat = (id: string) => {
-    setChats(prev => prev.filter(c => c.id !== id));
+    if (user) {
+      // For permanent delete, we can use deleteDoc
+      setChats(prev => prev.filter(c => c.id !== id));
+    } else {
+      setChats(prev => prev.filter(c => c.id !== id));
+    }
   };
 
   const startEditing = (id: string, title: string, e: React.MouseEvent) => {
@@ -1193,7 +1759,14 @@ function App() {
   const saveTitle = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (editingChatId && editTitle.trim()) {
-      setChats(prev => prev.map(c => c.id === editingChatId ? { ...c, title: editTitle.trim() } : c));
+      if (user) {
+        setIsSyncing(true);
+        setDoc(doc(db, "chats", editingChatId), { title: editTitle.trim() }, { merge: true })
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${editingChatId}`))
+          .finally(() => setIsSyncing(false));
+      } else {
+        setChats(prev => prev.map(c => c.id === editingChatId ? { ...c, title: editTitle.trim() } : c));
+      }
     }
     setEditingChatId(null);
   };
@@ -1220,38 +1793,47 @@ function App() {
   };
 
   const handleTaskAction = (promptPrefix: string) => {
-    if (!input.trim()) {
+    const trimmedInput = input.trim().toLowerCase();
+    const trimmedPrefix = promptPrefix.trim().toLowerCase();
+    
+    if (!trimmedInput) {
       setInput(promptPrefix);
+    } else if (trimmedInput.includes(trimmedPrefix)) {
+      // If the input already contains this prefix (case-insensitive), just send it
+      handleSend(input);
     } else {
+      // Otherwise append and send
       handleSend(promptPrefix + input);
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = useCallback(async () => {
     setLoginError(null);
     try {
       await signInWithGoogle();
     } catch (error: any) {
       console.error("Login failed", error);
       if (error.code === "auth/popup-closed-by-user") {
-        setLoginError("The login popup was closed before completion. Please try again and keep the popup window open until finished.");
+        setLoginError("Login window was closed. Please try again and complete the sign-in.");
       } else if (error.code === "auth/cancelled-via-interactive-request") {
         setLoginError("Login was cancelled. Please try again.");
       } else if (error.code === "auth/popup-blocked") {
         setLoginError("The login popup was blocked by your browser. Please allow popups for this site and try again.");
+      } else if (error.code === "auth/unauthorized-domain") {
+        setLoginError(`This domain (${window.location.hostname}) is not authorized in your Firebase Console. Please add it to the "Authorized domains" list in Authentication > Settings.`);
       } else {
-        setLoginError("An unexpected error occurred during login. Please try again.");
+        setLoginError(`An unexpected error occurred: ${error.message}. (Domain: ${window.location.hostname})`);
       }
     }
-  };
+  }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await logOut();
     } catch (error) {
       console.error("Logout failed", error);
     }
-  };
+  }, []);
 
   const exportChatAsTxt = (chat: Chat) => {
     const content = chat.messages.map(m => {
@@ -1371,223 +1953,32 @@ function App() {
   };
 
   const resetChat = (id: string) => {
-    setChats(prev => prev.map(c => c.id === id ? { ...c, messages: [] } : c));
+    if (user) {
+      setIsSyncing(true);
+      setDoc(doc(db, "chats", id), { messages: [] }, { merge: true })
+        .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${id}`))
+        .finally(() => setIsSyncing(false));
+    } else {
+      setChats(prev => prev.map(c => c.id === id ? { ...c, messages: [] } : c));
+    }
     setIsResetDialogOpen(false);
     setChatToReset(null);
   };
 
   const confirmDeleteChat = (id: string) => {
-    setChats(prev => prev.map(c => c.id === id ? { ...c, deletedAt: Date.now() } : c));
+    if (user) {
+      setIsSyncing(true);
+      setDoc(doc(db, "chats", id), { deletedAt: Date.now() }, { merge: true })
+        .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${id}`))
+        .finally(() => setIsSyncing(false));
+    } else {
+      setChats(prev => prev.map(c => c.id === id ? { ...c, deletedAt: Date.now() } : c));
+    }
     if (activeChatId === id) {
       setActiveChatId(null);
     }
     setIsDeleteDialogOpen(false);
     setChatToDelete(null);
-  };
-
-  const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => {
-    const isCollapsed = !isMobile && isSidebarCollapsed;
-
-    return (
-      <TooltipProvider delay={0}>
-        <div className="flex flex-col h-full bg-white dark:bg-[#0a0a0a] border-r dark:border-white/5 transition-all duration-300 ease-in-out">
-          {/* Sidebar Header */}
-          <div className={cn("p-6", isCollapsed && "p-4 flex flex-col items-center")}>
-            <div className="flex items-center justify-between w-full">
-              <AnimatePresence mode="wait">
-                {!isCollapsed ? (
-                  <motion.div 
-                    key="full-logo"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex items-center justify-between w-full overflow-hidden"
-                  >
-                    <GeniusLogo />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-lg hover:bg-muted"
-                      onClick={() => setIsSidebarCollapsed(true)}
-                    >
-                      <PanelLeftClose className="w-4 h-4 text-foreground/50" />
-                    </Button>
-                  </motion.div>
-                ) : (
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <motion.div 
-                        key="collapsed-logo"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="flex flex-col items-center space-y-4"
-                      >
-                        <div 
-                          className="cursor-pointer"
-                          onClick={() => setIsSidebarCollapsed(false)}
-                        >
-                          <GeniusLogo collapsed />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-lg hover:bg-muted"
-                          onClick={() => setIsSidebarCollapsed(false)}
-                        >
-                          <PanelLeftOpen className="w-4 h-4 text-foreground/50" />
-                        </Button>
-                      </motion.div>
-                    } />
-                    <TooltipContent side="right">Expand Sidebar</TooltipContent>
-                  </Tooltip>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Sidebar Scrollable Area */}
-          <motion.div 
-            initial="hidden"
-            animate="visible"
-            variants={{
-              visible: {
-                transition: {
-                  staggerChildren: 0.05
-                }
-              }
-            }}
-            className="flex-1 overflow-y-auto px-3 space-y-2 pb-6 custom-scrollbar"
-          >
-            <motion.div variants={{
-              hidden: { opacity: 0, x: -10 },
-              visible: { opacity: 1, x: 0 }
-            }}>
-              <Button
-                variant="ghost"
-                className={cn(
-                  "w-full justify-start hover:bg-muted group transition-all duration-200 rounded-lg h-9 px-3 text-foreground mb-2",
-                  !activeChatId && "bg-muted",
-                  isCollapsed && "px-0 justify-center"
-                )}
-                onClick={() => {
-                  setActiveChatId(null);
-                  setIsSidebarOpen(false);
-                }}
-              >
-                <Plus className={cn("w-3.5 h-3.5 shrink-0", !isCollapsed && "mr-3")} />
-                {!isCollapsed && <span className="font-bold text-xs">New Chat</span>}
-              </Button>
-            </motion.div>
-
-            {/* Subjects Section */}
-            <div className="space-y-1">
-              {SUBJECTS.map((sub) => (
-                <Tooltip key={sub.name}>
-                  <TooltipTrigger render={
-                    <motion.div
-                      variants={{
-                        hidden: { opacity: 0, x: -10 },
-                        visible: { opacity: 1, x: 0 }
-                      }}
-                      whileHover={{ x: 4, backgroundColor: "var(--muted)" }}
-                      whileTap={{ scale: 0.98 }}
-                      className="rounded-lg"
-                    >
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start hover:bg-transparent group transition-all duration-300 rounded-lg h-10 px-3 text-foreground relative overflow-hidden",
-                          activeChat?.subject === sub.name 
-                            ? "bg-black dark:bg-white text-white dark:text-black shadow-md" 
-                            : "text-foreground",
-                          isCollapsed && "px-0 justify-center"
-                        )}
-                        onClick={() => {
-                          createNewChat(undefined, sub.name);
-                          setIsSidebarOpen(false);
-                        }}
-                      >
-                        <sub.icon className={cn(
-                          "w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110", 
-                          !isCollapsed && "mr-3", 
-                          activeChat?.subject === sub.name ? "text-current" : sub.color
-                        )} />
-                        {!isCollapsed && (
-                          <span className="font-bold text-xs">{sub.name}</span>
-                        )}
-                        {activeChat?.subject === sub.name && (
-                          <motion.div 
-                            layoutId="active-subject-glow"
-                            className="absolute inset-0 bg-white/10 dark:bg-black/10 pointer-events-none"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                          />
-                        )}
-                      </Button>
-                    </motion.div>
-                  } />
-                  {isCollapsed && <TooltipContent side="right">{sub.name}</TooltipContent>}
-                </Tooltip>
-              ))}
-            </div>
-
-            {/* History Section */}
-            <div className="pt-2 space-y-0.5">
-              {activeChats.filter(c => !c.subject).map((chat) => (
-                <SidebarItem 
-                  key={chat.id}
-                  chat={chat}
-                  activeChatId={activeChatId}
-                  isCollapsed={isCollapsed}
-                  setActiveChatId={setActiveChatId}
-                  setIsSidebarOpen={setIsSidebarOpen}
-                  setChatToDelete={setChatToDelete}
-                  setIsDeleteDialogOpen={setIsDeleteDialogOpen}
-                />
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Sidebar Footer (Settings & Profile) */}
-          <div className="p-4 mt-auto border-t border-border space-y-2">
-            <p className="text-[8px] text-center text-foreground/30 font-bold uppercase tracking-widest mb-2">made by Arnav</p>
-            {!user ? (
-              <Button 
-                variant="outline" 
-                className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest border-border text-foreground", isCollapsed && "w-10 p-0 justify-center")}
-                onClick={handleGoogleLogin}
-              >
-                <LogIn className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
-                {!isCollapsed && <span>Login</span>}
-              </Button>
-            ) : (
-              <div className={cn("flex items-center gap-3 p-2 rounded-xl bg-muted border border-border", isCollapsed && "p-1 justify-center")}>
-                <Avatar className="w-8 h-8 rounded-lg">
-                  <AvatarImage src={user.photoURL || ""} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">{user.displayName?.charAt(0) || "U"}</AvatarFallback>
-                </Avatar>
-                {!isCollapsed && (
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold truncate text-foreground">{user.displayName}</p>
-                    <p className="text-[9px] text-foreground/70 truncate">{user.email}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <Button 
-              variant="ghost" 
-              className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-muted text-foreground", isCollapsed && "w-10 p-0 justify-center")}
-              onClick={() => setIsSettingsOpen(true)}
-            >
-              <Settings className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
-              {!isCollapsed && <span>Settings</span>}
-            </Button>
-          </div>
-        </div>
-      </TooltipProvider>
-    );
   };
 
   return (
@@ -1606,7 +1997,24 @@ function App() {
         }}
         className="hidden md:flex border-r dark:border-white/5 bg-white dark:bg-[#0a0a0a] flex-col z-20 relative overflow-hidden"
       >
-        <SidebarContent />
+        <SidebarContent 
+          isSidebarCollapsed={isSidebarCollapsed}
+          setIsSidebarCollapsed={setIsSidebarCollapsed}
+          user={user}
+          isSyncing={isSyncing}
+          activeChat={activeChat}
+          activeChats={activeChats}
+          activeChatId={activeChatId}
+          createNewChat={createNewChat}
+          setIsSidebarOpen={setIsSidebarOpen}
+          setActiveChatId={setActiveChatId}
+          setChatToDelete={setChatToDelete}
+          setIsDeleteDialogOpen={setIsDeleteDialogOpen}
+          handleGoogleLogin={handleGoogleLogin}
+          loginError={loginError}
+          setIsSettingsOpen={setIsSettingsOpen}
+          handleLogout={handleLogout}
+        />
       </motion.aside>
 
       {/* Main Content */}
@@ -1621,7 +2029,25 @@ function App() {
                 </Button>
               } />
               <SheetContent side="left" className="p-0 w-72 border-r border-border shadow-2xl bg-background">
-                <SidebarContent isMobile />
+                <SidebarContent 
+                  isMobile 
+                  isSidebarCollapsed={isSidebarCollapsed}
+                  setIsSidebarCollapsed={setIsSidebarCollapsed}
+                  user={user}
+                  isSyncing={isSyncing}
+                  activeChat={activeChat}
+                  activeChats={activeChats}
+                  activeChatId={activeChatId}
+                  createNewChat={createNewChat}
+                  setIsSidebarOpen={setIsSidebarOpen}
+                  setActiveChatId={setActiveChatId}
+                  setChatToDelete={setChatToDelete}
+                  setIsDeleteDialogOpen={setIsDeleteDialogOpen}
+                  handleGoogleLogin={handleGoogleLogin}
+                  loginError={loginError}
+                  setIsSettingsOpen={setIsSettingsOpen}
+                  handleLogout={handleLogout}
+                />
               </SheetContent>
             </Sheet>
             <div className="flex items-center space-x-2">
@@ -1950,7 +2376,13 @@ function App() {
                 </div>
               </motion.div>
             ) : (
-              <div className="max-w-2xl mx-auto space-y-6 pb-12">
+              <motion.div 
+                key="chat-view"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="max-w-2xl mx-auto space-y-6 pb-12"
+              >
                 <div className="space-y-6 py-10">
                   {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
@@ -2033,7 +2465,7 @@ function App() {
                     </div>
                   </motion.div>
                 )}
-              </div>
+              </motion.div>
             )}
           </AnimatePresence>
 
@@ -2074,6 +2506,8 @@ function App() {
             stopGeneration={stopGeneration}
             recognitionRef={recognitionRef}
             setIsListening={setIsListening}
+            input={input}
+            setInput={setInput}
           />
         )}
     </main>

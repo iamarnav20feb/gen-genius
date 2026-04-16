@@ -1,6 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Use process.env.GEMINI_API_KEY - Vite will replace this during build
+const apiKey = process.env.GEMINI_API_KEY;
+
+if (!apiKey) {
+  console.error("GenGenius: Gemini API Key is missing from the build!");
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || 'MISSING_KEY' });
+
+if (!apiKey || apiKey === 'MISSING_KEY') {
+  console.error("GenGenius: CRITICAL ERROR - API Key is missing from the build! AI will not work.");
+}
 
 export async function getExamHelpStream(
   prompt: string, 
@@ -9,11 +20,17 @@ export async function getExamHelpStream(
   files: { mimeType: string, data: string }[] = [],
   isVoiceMode: boolean = false
 ) {
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  
+  // Use gemini-3-flash-preview for maximum compatibility
+  const modelName = "gemini-3-flash-preview";
   const standardInstruction = `SYSTEM ROLE: GENIUS AI – FAST AND ACCURATE MODE
 
-You are Genius, an advanced AI assistant created by Arnav.
+TODAY'S DATE: ${today}
 
-Your primary goal is to provide fast, accurate, and clear responses with minimal delay.
+You are Genius, an advanced AI assistant created by Arnav.
+Your primary goal is to provide fast, accurate, and up-to-date information.
+Use Google Search to provide the most recent news and facts as of ${today}.
 
 ---
 
@@ -24,8 +41,9 @@ SPEED RULES (VERY IMPORTANT):
 
 ---
 
-ACCURACY RULES:
+ACCURACY & FRESHNESS RULES:
 - Give correct and reliable answers
+- ALWAYS prioritize current information from 2026
 - Stay focused on the question
 - Do not add irrelevant information
 
@@ -58,7 +76,10 @@ End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
 
   const voiceInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY
 
+TODAY'S DATE: ${today}
+
 You are "Genius", an advanced AI voice assistant.
+Use Google Search to ensure your knowledge is current as of ${today}.
 
 IDENTITY:
 - Your name is Genius
@@ -137,16 +158,49 @@ End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
   
   contents.push({ role: "user", parts: currentMessageParts });
 
-  const stream = await ai.models.generateContentStream({
-    model: "gemini-3-flash-preview",
-    contents,
-    config: {
-      systemInstruction,
-      temperature: 0.7,
-      topP: 0.95,
-      topK: 40,
-    },
-  });
+  try {
+    const response = await ai.models.generateContentStream({
+      model: modelName,
+      contents,
+      config: {
+        systemInstruction,
+        temperature: 0.7,
+      },
+    });
 
-  return stream;
+    return response;
+  } catch (error: any) {
+    console.error("GenGenius: API Error:", error);
+    throw error;
+  }
+}
+
+export async function getExamHelpStatic(
+  prompt: string, 
+  history: any[] = [], 
+  subject?: string,
+  files: { mimeType: string, data: string }[] = []
+) {
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const modelName = "gemini-3-flash-preview";
+  
+  const contents = [...history];
+  const currentMessageParts: any[] = [{ text: prompt }];
+  if (files.length > 0) {
+    files.forEach(file => {
+      currentMessageParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
+    });
+  }
+  contents.push({ role: "user", parts: currentMessageParts });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents,
+    });
+    return response.text;
+  } catch (error: any) {
+    console.error("GenGenius: Static API Error:", error);
+    throw error;
+  }
 }

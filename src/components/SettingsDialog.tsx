@@ -26,8 +26,8 @@ interface SettingsDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   user: FirebaseUser | null;
-  profile: { name: string; bio: string };
-  setProfile: React.Dispatch<React.SetStateAction<{ name: string; bio: string }>>;
+  profile: { name: string; email: string; bio: string; photoURL?: string };
+  setProfile: React.Dispatch<React.SetStateAction<{ name: string; email: string; bio: string; photoURL?: string }>>;
   exportAllData: () => void;
   importData: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setIsRecycleBinOpen: (open: boolean) => void;
@@ -160,7 +160,6 @@ export default function SettingsDialog({
                   className="w-full justify-start h-11 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-border text-foreground"
                   onClick={() => {
                     handleGoogleLogin();
-                    onOpenChange(false);
                   }}
                 >
                   <LogIn className="w-4 h-4 mr-2" />
