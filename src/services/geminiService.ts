@@ -22,8 +22,8 @@ export async function getExamHelpStream(
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   
-  // Use gemini-3-flash-preview for maximum compatibility
-  const modelName = "gemini-3-flash-preview";
+  // Use gemini-2.5-flash for maximum compatibility
+  const modelName = "gemini-2.5-flash";
   const subjectRule = subject ? `
 ---
 STRICT SUBJECT ISOLATION RULE (UNFORGETTABLE):
@@ -193,7 +193,7 @@ export async function getExamHelpStatic(
   files: { mimeType: string, data: string }[] = []
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const modelName = "gemini-3-flash-preview";
+  const modelName = "gemini-2.5-flash";
   
   const subjectRule = subject ? `
 ---
