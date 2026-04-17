@@ -1,17 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Use process.env.GEMINI_API_KEY - Vite will replace this during build
+// GEMINI_API_KEY is automatically injected by the platform.
+// In AI Studio, we use process.env.GEMINI_API_KEY directly in React (Vite) apps.
 const apiKey = process.env.GEMINI_API_KEY;
 
-if (!apiKey) {
-  console.error("GenGenius: Gemini API Key is missing from the build!");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || 'MISSING_KEY' });
-
-if (!apiKey || apiKey === 'MISSING_KEY') {
-  console.error("GenGenius: CRITICAL ERROR - API Key is missing from the build! AI will not work.");
-}
+const ai = new GoogleGenAI({ apiKey: apiKey as string });
 
 export async function getExamHelpStream(
   prompt: string, 
@@ -22,8 +15,8 @@ export async function getExamHelpStream(
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   
-  // Use gemini-2.5-flash for maximum compatibility
-  const modelName = "gemini-2.5-flash";
+  // Use gemini-3-flash-preview to avoid stringent rate limits and provide high speed/capacity
+  const modelName = "gemini-3-flash-preview";
   const subjectRule = subject ? `
 ---
 STRICT SUBJECT ISOLATION RULE (UNFORGETTABLE):
@@ -193,7 +186,7 @@ export async function getExamHelpStatic(
   files: { mimeType: string, data: string }[] = []
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const modelName = "gemini-2.5-flash";
+  const modelName = "gemini-3-flash-preview";
   
   const subjectRule = subject ? `
 ---

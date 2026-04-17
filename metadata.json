@@ -1,5 +1,5 @@
 {
-  "name": "GenGenius",
-  "description": "AI assistant for Indian government exam preparation with voice support and exam-oriented explanations.",
+  "name": "GenGenius Elite",
+  "description": "The ultimate AI assistant for competitive exam preparation. Features elite subject-specific reasoning, voice interaction, and real-time document analysis.",
   "requestFramePermissions": ["microphone"]
 }

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense, memo } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense, memo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Send, 
@@ -672,6 +672,7 @@ interface SidebarContentProps {
   setIsDeleteDialogOpen: (open: boolean) => void;
   handleGoogleLogin: () => void;
   loginError: string | null;
+  isLoggingIn: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   handleLogout: () => void;
 }
@@ -692,6 +693,7 @@ const SidebarContent = memo(({
   setIsDeleteDialogOpen,
   handleGoogleLogin,
   loginError,
+  isLoggingIn,
   setIsSettingsOpen,
   handleLogout
 }: SidebarContentProps) => {
@@ -872,9 +874,14 @@ const SidebarContent = memo(({
                 variant="outline" 
                 className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest border-border text-foreground", isCollapsed && "w-10 p-0 justify-center")}
                 onClick={handleGoogleLogin}
+                disabled={isLoggingIn}
               >
-                <LogIn className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
-                {!isCollapsed && <span>Login</span>}
+                {isLoggingIn ? (
+                  <Loader2 className={cn("w-4 h-4 animate-spin", !isCollapsed && "mr-2")} />
+                ) : (
+                  <LogIn className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
+                )}
+                {!isCollapsed && <span>{isLoggingIn ? "Signing in..." : "Login"}</span>}
               </Button>
             </div>
           ) : (
@@ -908,6 +915,33 @@ const SidebarContent = memo(({
 
 SidebarContent.displayName = "SidebarContent";
 
+// Error Boundary Component
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen space-y-4 p-4 text-center bg-background text-foreground">
+          <BrainCircuit className="w-16 h-16 text-primary animate-pulse" />
+          <h1 className="text-2xl font-bold italic tracking-tighter">GENIUS ENGINE STALLED</h1>
+          <p className="text-muted-foreground max-w-md font-medium">The GenGenius reasoning core encountered an unexpected state. Please refresh to restart the elite tutor.</p>
+          <Button onClick={() => window.location.reload()} variant="default" className="rounded-full px-8">Restart Genius</Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile>(() => {
@@ -915,7 +949,25 @@ function App() {
     return saved ? JSON.parse(saved) : { name: "", email: "", bio: "", photoURL: "" };
   });
 
-  const [chats, setChats] = useState<Chat[]>([]);
+  const [chats, setChats] = useState<Chat[]>(() => {
+    try {
+      const saved = localStorage.getItem("gen_genius_chats");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.map((c: any) => ({
+          ...c,
+          createdAt: new Date(c.createdAt),
+          messages: (c.messages || []).map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+          }))
+        }));
+      }
+    } catch (e) {
+      console.error("Error loading local chats", e);
+    }
+    return [];
+  });
   const chatsRef = useRef<Chat[]>(chats);
   useEffect(() => {
     chatsRef.current = chats;
@@ -943,6 +995,7 @@ function App() {
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<FileAttachment[]>([]);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [chatToReset, setChatToReset] = useState<string | null>(null);
@@ -981,48 +1034,52 @@ function App() {
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = assistantLanguage;
+      try {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = assistantLanguage;
 
-      recognitionRef.current.onstart = () => {
-        setIsListening(true);
-      };
+        recognitionRef.current.onstart = () => {
+          setIsListening(true);
+        };
 
-      recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        if (isAssistantActive) {
-          if (transcript.trim()) {
-            handleSend(transcript);
-          } else {
-            speakText("I didn't catch that. Please repeat.", "error-repeat");
-          }
-        } else {
-          setInput(prev => prev + (prev ? " " : "") + transcript);
-        }
-      };
-
-      recognitionRef.current.onerror = (event: any) => {
-        if (event.error !== 'no-speech') {
-          console.error("Speech recognition error", event.error);
-        }
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-        // Auto-restart listening if assistant is active and not busy
-        if (isAssistantActive && !isSpeaking && !isLoading) {
-          setTimeout(() => {
-            if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
-              try {
-                recognitionRef.current?.start();
-              } catch (e) {}
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          if (isAssistantActive) {
+            if (transcript.trim()) {
+              handleSend(transcript);
+            } else {
+              speakText("I didn't catch that. Please repeat.", "error-repeat");
             }
-          }, 1000);
-        }
-      };
+          } else {
+            setInput(prev => prev + (prev ? " " : "") + transcript);
+          }
+        };
+
+        recognitionRef.current.onerror = (event: any) => {
+          if (event.error !== 'no-speech') {
+            console.error("Speech recognition error", event.error);
+          }
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+          // Auto-restart listening if assistant is active and not busy
+          if (isAssistantActive && !isSpeaking && !isLoading) {
+            setTimeout(() => {
+              if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
+                try {
+                  recognitionRef.current?.start();
+                } catch (e) {}
+              }
+            }, 1000);
+          }
+        };
+      } catch (e) {
+        console.error("SpeechRecognition initialization failed", e);
+      }
     }
   }, [isAssistantActive, isSpeaking, isLoading, assistantLanguage]);
 
@@ -1089,18 +1146,21 @@ function App() {
     
     const isFemale = (name: string) => 
       name.includes("Female") || name.includes("Girl") || name.includes("Woman") || 
-      name.includes("Zira") || name.includes("Veena") || name.includes("Heera");
+      name.includes("Zira") || name.includes("Veena") || name.includes("Heera") || 
+      name.includes("Samantha") || name.includes("Victoria") || name.includes("Google US English");
 
     if (assistantLanguage === "hi-IN") {
       // Try to find a male Hindi voice
       selectedVoice = voices.find(v => v.lang === "hi-IN" && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi"))) ||
-                      voices.find(v => v.lang === "hi-IN" && !isFemale(v.name));
+                      voices.find(v => v.lang === "hi-IN" && !isFemale(v.name)) ||
+                      voices.find(v => v.lang === "hi-IN");
     } else {
       // Try to find a male Indian English voice (en-IN)
       selectedVoice = voices.find(v => v.lang === "en-IN" && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi") || v.name.includes("Prabhat"))) ||
                       voices.find(v => v.lang === "en-IN" && !isFemale(v.name)) ||
                       // Fallback to any male English voice
-                      voices.find(v => v.lang.startsWith("en") && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy")));
+                      voices.find(v => v.lang.startsWith("en") && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy"))) ||
+                      voices.find(v => v.lang.startsWith("en") && !isFemale(v.name));
     }
     
     if (selectedVoice) utterance.voice = selectedVoice;
@@ -1165,11 +1225,21 @@ function App() {
               photoURL: newProfile.photoURL 
             });
           }
+
+          // Migrate local anonymous chats
+          chatsRef.current.forEach(localChat => {
+            if (localChat.userId === "anonymous" || !localChat.userId) {
+              const migratedChat = { ...localChat, userId: currentUser.uid };
+              setDoc(doc(db, "chats", migratedChat.id), sanitizeForFirestore(migratedChat), { merge: true }).catch(console.error);
+            }
+          });
+          
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
         }
       } else {
-        setChats([]);
+        // Do not clear local chats on logout so user doesn't feel like they "lost" everything unexpectedly
+        // Only clear the profile
         setProfile({ name: "", email: "", bio: "", photoURL: "" });
       }
     });
@@ -1223,8 +1293,10 @@ function App() {
         });
 
         // 2. Keep chats that are ONLY in local state (not yet in Firestore)
-        // This is critical for brand new chats that are still being saved
+        // This is critical for brand new chats that are still being saved.
+        // We ensure we only keep them if they belong to 'anonymous' (soon to be migrated) or the current user.
         const localOnly = prev.filter(localChat => 
+          (localChat.userId === "anonymous" || !localChat.userId || localChat.userId === user.uid) &&
           !updatedChats.some(newChat => newChat.id === localChat.id) &&
           // Only keep them if they were created recently (last 60 seconds)
           // or if they have messages (meaning they are active)
@@ -1431,7 +1503,19 @@ function App() {
     const interval = setInterval(() => {
       const now = Date.now();
       const fortyEightHours = 48 * 60 * 60 * 1000;
-      setChats(prev => prev.filter(c => !c.deletedAt || (now - c.deletedAt < fortyEightHours)));
+      setChats(prev => {
+        const toDelete = prev.filter(c => c.deletedAt && (now - c.deletedAt >= fortyEightHours));
+        if (toDelete.length > 0) {
+          import("firebase/firestore").then(({ deleteDoc, doc }) => {
+            toDelete.forEach(c => {
+              if (c.userId !== "anonymous") {
+                deleteDoc(doc(db, "chats", c.id)).catch(console.error);
+              }
+            });
+          });
+        }
+        return prev.filter(c => !c.deletedAt || (now - c.deletedAt < fortyEightHours));
+      });
     }, 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -1536,7 +1620,8 @@ function App() {
           
           const updateData = sanitizeForFirestore({
             messages: limitedMessages,
-            title: !latestChat.messages.some(m => m.role === "user") ? (finalPrompt || "File Analysis").slice(0, 30) + (finalPrompt.length > 30 ? "..." : "") : latestChat.title
+            title: !latestChat.messages.some(m => m.role === "user") ? (finalPrompt || "File Analysis").slice(0, 30) + (finalPrompt.length > 30 ? "..." : "") : latestChat.title,
+            userId: user.uid
           });
 
           setDoc(chatRef, updateData, { merge: true })
@@ -1639,7 +1724,8 @@ function App() {
             const limitedMessages = updatedMessages.length > 100 ? updatedMessages.slice(-100) : updatedMessages;
             
             const updateData = sanitizeForFirestore({
-              messages: limitedMessages
+              messages: limitedMessages,
+              userId: user.uid
             });
 
             setDoc(chatRef, updateData, { merge: true })
@@ -1663,9 +1749,20 @@ function App() {
         
         let errorContent = "I'm having trouble connecting to my brain right now. 🧠 Please check your connection and try again.";
         
-        if (error?.status === "RESOURCE_EXHAUSTED" || error?.message?.includes("429") || error?.message?.includes("quota")) {
-          errorContent = "I've reached my temporary limit for free answers. Please wait a minute and try again.";
-        } else if (error?.message?.includes("API key")) {
+        const errorString = typeof error === 'object' ? JSON.stringify(error) : String(error);
+        
+        if (
+          error?.status === "RESOURCE_EXHAUSTED" || 
+          error?.message?.includes("429") || 
+          error?.message?.includes("quota") ||
+          error?.message?.includes("RESOURCE_EXHAUSTED") ||
+          error?.status === 429 ||
+          errorString.includes("429") ||
+          errorString.includes("RESOURCE_EXHAUSTED") ||
+          errorString.includes("quota")
+        ) {
+          errorContent = "⚠️ **API Quota Exceeded:** I have reached my Google Gemini API limits. Please wait for the quota to reset, or check your billing and plan details at Google AI Studio.";
+        } else if (errorString.includes("API key")) {
           errorContent = "⚠️ **API Key Error:** My connection to the AI is broken. Please ensure the API key is correctly set in the environment.";
         } else if (error?.message?.includes("fetch") || error?.message?.includes("NetworkError") || error?.message?.includes("Failed to fetch")) {
           errorContent = "⚠️ **Network Blocked:** I can't reach Google's AI servers. Since you are on a Chromebook, your school or network might be blocking 'generativelanguage.googleapis.com'. Try using a different Wi-Fi or a personal hotspot.";
@@ -1711,7 +1808,7 @@ function App() {
   const restoreChat = (id: string) => {
     if (user) {
       setIsSyncing(true);
-      setDoc(doc(db, "chats", id), { deletedAt: null }, { merge: true })
+      setDoc(doc(db, "chats", id), { deletedAt: null, userId: user.uid }, { merge: true })
         .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${id}`))
         .finally(() => setIsSyncing(false));
     } else {
@@ -1721,7 +1818,11 @@ function App() {
 
   const permanentlyDeleteChat = (id: string) => {
     if (user) {
-      // For permanent delete, we can use deleteDoc
+      import("firebase/firestore").then(({ deleteDoc, doc }) => {
+        deleteDoc(doc(db, "chats", id)).catch((err) => {
+          handleFirestoreError(err, OperationType.DELETE, `chats/${id}`);
+        });
+      });
       setChats(prev => prev.filter(c => c.id !== id));
     } else {
       setChats(prev => prev.filter(c => c.id !== id));
@@ -1739,7 +1840,7 @@ function App() {
     if (editingChatId && editTitle.trim()) {
       if (user) {
         setIsSyncing(true);
-        setDoc(doc(db, "chats", editingChatId), { title: editTitle.trim() }, { merge: true })
+        setDoc(doc(db, "chats", editingChatId), { title: editTitle.trim(), userId: user.uid }, { merge: true })
           .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${editingChatId}`))
           .finally(() => setIsSyncing(false));
       } else {
@@ -1786,24 +1887,28 @@ function App() {
   };
 
   const handleGoogleLogin = useCallback(async () => {
+    if (isLoggingIn) return;
     setLoginError(null);
+    setIsLoggingIn(true);
     try {
       await signInWithGoogle();
     } catch (error: any) {
       console.error("Login failed", error);
       if (error.code === "auth/popup-closed-by-user") {
-        setLoginError("Login window was closed. Please try again and complete the sign-in.");
+        setLoginError("The login window was closed before completion. This can happen if you closed the window manually or if a browser extension blocked it. Please try again and keep the popup open.");
       } else if (error.code === "auth/cancelled-via-interactive-request") {
         setLoginError("Login was cancelled. Please try again.");
       } else if (error.code === "auth/popup-blocked") {
-        setLoginError("The login popup was blocked by your browser. Please allow popups for this site and try again.");
+        setLoginError("The login popup was blocked by your browser. Please look for an icon in your address bar to 'Always allow popups' for this site and try again.");
       } else if (error.code === "auth/unauthorized-domain") {
-        setLoginError(`This domain (${window.location.hostname}) is not authorized in your Firebase Console. Please add it to the "Authorized domains" list in Authentication > Settings.`);
+        setLoginError(`This domain (${window.location.hostname}) is not authorized. I have attempted to fix this, please refresh and try again.`);
       } else {
-        setLoginError(`An unexpected error occurred: ${error.message}. (Domain: ${window.location.hostname})`);
+        setLoginError(`Login Error: ${error.message}`);
       }
+    } finally {
+      setIsLoggingIn(false);
     }
-  }, []);
+  }, [isLoggingIn]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -1933,7 +2038,7 @@ function App() {
   const resetChat = (id: string) => {
     if (user) {
       setIsSyncing(true);
-      setDoc(doc(db, "chats", id), { messages: [] }, { merge: true })
+      setDoc(doc(db, "chats", id), { messages: [], userId: user.uid }, { merge: true })
         .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${id}`))
         .finally(() => setIsSyncing(false));
     } else {
@@ -1946,7 +2051,7 @@ function App() {
   const confirmDeleteChat = (id: string) => {
     if (user) {
       setIsSyncing(true);
-      setDoc(doc(db, "chats", id), { deletedAt: Date.now() }, { merge: true })
+      setDoc(doc(db, "chats", id), { deletedAt: Date.now(), userId: user.uid }, { merge: true })
         .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${id}`))
         .finally(() => setIsSyncing(false));
     } else {
@@ -1990,6 +2095,7 @@ function App() {
           setIsDeleteDialogOpen={setIsDeleteDialogOpen}
           handleGoogleLogin={handleGoogleLogin}
           loginError={loginError}
+          isLoggingIn={isLoggingIn}
           setIsSettingsOpen={setIsSettingsOpen}
           handleLogout={handleLogout}
         />
@@ -2023,6 +2129,7 @@ function App() {
                   setIsDeleteDialogOpen={setIsDeleteDialogOpen}
                   handleGoogleLogin={handleGoogleLogin}
                   loginError={loginError}
+                  isLoggingIn={isLoggingIn}
                   setIsSettingsOpen={setIsSettingsOpen}
                   handleLogout={handleLogout}
                 />
@@ -2230,7 +2337,7 @@ function App() {
                           exit={{ opacity: 0, y: -10 }}
                           className="text-foreground text-2xl font-bold max-w-md mx-auto leading-tight italic"
                         >
-                          "{messages[messages.length - 1]?.content.slice(0, 120)}..."
+                          "{messages[messages.length - 1]?.content?.slice(0, 120) || 'I am ready to help.'}..."
                         </motion.div>
                       ) : isListening ? (
                         <motion.div
@@ -2540,7 +2647,15 @@ function App() {
   );
 }
 
-export default App;
+export default function Root() {
+  return (
+    <ErrorBoundary>
+      <TooltipProvider>
+        <App />
+      </TooltipProvider>
+    </ErrorBoundary>
+  );
+}
 
 
 

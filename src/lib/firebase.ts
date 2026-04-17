@@ -16,27 +16,10 @@ const dbId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatab
 export const db = getFirestore(app, dbId);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Analytics is optional and might not work in all environments (like Chromebooks with restrictions)
 export const analytics = typeof window !== "undefined" ? getAnalytics(app) : null;
-
-// Connection test
-if (typeof window !== "undefined") {
-  import("firebase/firestore").then(({ doc, getDocFromCache, getDocFromServer }) => {
-    const testConn = async () => {
-      try {
-        // Try to fetch a non-existent doc just to check connectivity
-        await getDocFromServer(doc(db, '_connection_test_', 'ping'));
-        console.log("Firestore connection successful");
-      } catch (error: any) {
-        if (error.message?.includes('offline') || error.code === 'unavailable') {
-          console.error("Firestore is unreachable. Please ensure you have created a database in the Firebase Console (Firestore -> Create Database) and that your internet is stable.");
-        }
-      }
-    };
-    testConn();
-  });
-}
 
 export const signInWithGoogle = async () => {
   try {
