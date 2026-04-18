@@ -61,7 +61,8 @@ import {
   Power,
   Cloud,
   ShieldCheck,
-  CloudOff
+  CloudOff,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -954,15 +955,23 @@ declare global {
 const ActivationOverlay = ({ 
   user, 
   onActivate, 
-  onLogin 
+  onLogin,
+  manualKey,
+  setManualKey,
+  onSaveManualKey
 }: { 
   user: any; 
   onActivate: () => void;
   onLogin: () => void;
+  manualKey: string;
+  setManualKey: (val: string) => void;
+  onSaveManualKey: () => void;
 }) => {
+  const isAistudioEnv = typeof window !== "undefined" && !!window.aistudio?.openSelectKey;
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4">
-      <Card className="w-full max-w-lg shadow-2xl border-2 border-primary/20 bg-background overflow-hidden relative">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 overflow-y-auto">
+      <Card className="w-full max-w-lg shadow-2xl border-2 border-primary/20 bg-background overflow-hidden relative my-8">
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Bot className="w-48 h-48" />
         </div>
@@ -976,23 +985,50 @@ const ActivationOverlay = ({
           <p className="text-muted-foreground font-medium text-[15px] leading-relaxed">
             {!user 
               ? "Welcome to Generation GENIUS! To start learning and using the AI tutor, please login with your Google Account."
-              : "Welcome to Generation GENIUS! To start learning, please connect your personal AI quota. This is a secure, background process managed by Google."}
+              : "Welcome to Generation GENIUS! Connect your personal AI quota to start learning. This keeps your usage secure and unlimited."}
           </p>
           
-          {user && (
+          {user && isAistudioEnv && (
             <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-200 dark:border-blue-800 text-left w-full space-y-4">
               <div className="flex items-center gap-2">
                 <Check className="w-5 h-5 text-blue-500 shrink-0" />
-                <span className="text-foreground font-bold">How to activate (Takes 1 minute):</span>
+                <span className="text-foreground font-bold">Quick Activation (Takes 1 minute):</span>
               </div>
               
-              <ol className="list-decimal pl-5 space-y-2 text-sm text-foreground/80">
+              <ul className="list-decimal pl-5 space-y-2 text-sm text-foreground/80">
                 <li>Click <b>ACTIVATE PERSONAL QUOTA</b> below.</li>
                 <li>A secure Google popup will appear.</li>
-                <li>Click the <span className="px-2 py-0.5 bg-background border rounded font-bold text-foreground mx-1">Create a new key</span> button.</li>
-                <li>Follow the Google prompts to create a Free Tier project.</li>
-                <li>Once successful, the window closes and AI unlocks automatically!</li>
-              </ol>
+                <li>Click the <span className="px-2 py-0.5 bg-background border rounded font-bold text-foreground mx-1 uppercase">Create a new key</span> button.</li>
+                <li>Once successful, the AI unlocks automatically!</li>
+              </ul>
+            </div>
+          )}
+
+          {user && !isAistudioEnv && (
+            <div className="bg-amber-50 dark:bg-amber-900/10 p-5 rounded-2xl border border-amber-200 dark:border-amber-800 text-left w-full space-y-4">
+              <div className="flex items-center gap-2">
+                <ExternalLink className="w-5 h-5 text-amber-500 shrink-0" />
+                <span className="text-foreground font-bold">Manual Activation Required:</span>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Since you are accessing this site externally, you need to provide your own Gemini API key manually.
+              </p>
+              <div className="space-y-3">
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary font-bold hover:underline inline-flex items-center gap-1"
+                >
+                  Get your free API Key here <ExternalLink className="w-3 h-3" />
+                </a>
+                <Input 
+                  placeholder="Paste your API Key here..."
+                  className="rounded-xl border-amber-200 dark:border-amber-800 bg-background"
+                  value={manualKey}
+                  onChange={(e) => setManualKey(e.target.value)}
+                />
+              </div>
             </div>
           )}
 
@@ -1004,13 +1040,22 @@ const ActivationOverlay = ({
             >
               Login with Google
             </Button>
-          ) : (
+          ) : isAistudioEnv ? (
             <Button 
               size="lg" 
               className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-primary hover:bg-primary/90 text-primary-foreground"
               onClick={onActivate}
             >
               Activate Personal Quota
+            </Button>
+          ) : (
+            <Button 
+              size="lg" 
+              className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={onSaveManualKey}
+              disabled={!manualKey.trim()}
+            >
+              Save Key & Unlock
             </Button>
           )}
         </CardContent>
@@ -1087,6 +1132,7 @@ function App() {
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
   
   const [hasApiKey, setHasApiKey] = useState(true);
+  const [manualKey, setManualKey] = useState("");
 
   useEffect(() => {
     const checkApiKey = async () => {
@@ -1094,6 +1140,15 @@ function App() {
         if (window.aistudio && window.aistudio.hasSelectedApiKey) {
           const hasKey = await window.aistudio.hasSelectedApiKey();
           setHasApiKey(hasKey);
+        } else {
+          // If we're not in AI Studio, check localStorage
+          const savedKey = localStorage.getItem("gen_genius_user_api_key");
+          if (savedKey) {
+            setHasApiKey(true);
+          } else {
+            // If no injected process.env.API_KEY exists (for non-AI Studio serverless dev), default to false
+            setHasApiKey(!!(typeof process !== "undefined" && process?.env?.API_KEY));
+          }
         }
       } catch(e) {
         console.error("Error checking AI Studio API key:", e);
@@ -1128,6 +1183,14 @@ function App() {
           setHasApiKey(false);
         }
       }
+    }
+  };
+
+  const handleSaveManualKey = () => {
+    if (manualKey.trim()) {
+      localStorage.setItem("gen_genius_user_api_key", manualKey.trim());
+      setHasApiKey(true);
+      window.location.reload(); // Reload to ensure the new AI client uses the key
     }
   };
 
@@ -2778,6 +2841,9 @@ function App() {
           user={user} 
           onActivate={handleActivateQuota} 
           onLogin={handleGoogleLogin} 
+          manualKey={manualKey}
+          setManualKey={setManualKey}
+          onSaveManualKey={handleSaveManualKey}
         />
       )}
     </div>

@@ -1,11 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 
 const getAIClient = () => {
-  // STRICT MODE: Only allow the injected API_KEY (selected by user).
-  // We completely remove the fallback to GEMINI_API_KEY so users cannot exhaust the app owner's quota.
-  const apiKey = typeof process !== "undefined" && process?.env?.API_KEY 
+  // 1. Priority: Injected API_KEY from AI Studio (selected by user)
+  let apiKey = typeof process !== "undefined" && process?.env?.API_KEY 
     ? process.env.API_KEY 
     : "";
+
+  // 2. Fallback: Manually entered key from localStorage (for external deployments like Vercel)
+  if (!apiKey && typeof window !== "undefined") {
+    apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
+  }
     
   if (!apiKey) {
     throw new Error("MISSING_PERSONAL_KEY");
