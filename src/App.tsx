@@ -61,8 +61,7 @@ import {
   Power,
   Cloud,
   ShieldCheck,
-  CloudOff,
-  Zap
+  CloudOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -962,99 +961,60 @@ const ActivationOverlay = ({
   onLogin: () => void;
 }) => {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 backdrop-blur-xl p-4 sm:p-6 select-none">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-xl"
-      >
-        <Card className="relative overflow-hidden border-2 border-primary/20 shadow-[0_0_50px_-12px_rgba(0,0,0,0.3)] bg-background">
-          {/* Brand Background Element */}
-          <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
-          <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-accent/5 rounded-full blur-3xl" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4">
+      <Card className="w-full max-w-lg shadow-2xl border-2 border-primary/20 bg-background overflow-hidden relative">
+        <div className="absolute top-0 right-0 p-4 opacity-10">
+          <Bot className="w-48 h-48" />
+        </div>
+        <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-6 relative z-10">
+          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-2 shadow-inner">
+            <Sparkles className="w-10 h-10 text-primary animate-pulse" />
+          </div>
+          <h2 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            {!user ? "Login Required" : "Activate Your AI"}
+          </h2>
+          <p className="text-muted-foreground font-medium text-[15px] leading-relaxed">
+            {!user 
+              ? "Welcome to Generation GENIUS! To start learning and using the AI tutor, please login with your Google Account."
+              : "Welcome to Generation GENIUS! To start learning, please connect your personal AI quota. This is a secure, background process managed by Google."}
+          </p>
           
-          <CardContent className="flex flex-col items-center p-8 sm:p-12 text-center relative z-10">
-            {/* GenGenius Logo/Icon */}
-            <div className="relative mb-8">
-              <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full" />
-              <div className="relative w-24 h-24 bg-gradient-to-br from-primary via-primary to-accent rounded-3xl flex items-center justify-center shadow-xl rotate-3">
-                <BrainCircuit className="w-12 h-12 text-white" />
+          {user && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-200 dark:border-blue-800 text-left w-full space-y-4">
+              <div className="flex items-center gap-2">
+                <Check className="w-5 h-5 text-blue-500 shrink-0" />
+                <span className="text-foreground font-bold">How to activate (Takes 1 minute):</span>
               </div>
-              <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-background rounded-2xl border-2 border-primary/20 flex items-center justify-center shadow-lg -rotate-12">
-                <Sparkles className="w-5 h-5 text-primary" />
-              </div>
+              
+              <ol className="list-decimal pl-5 space-y-2 text-sm text-foreground/80">
+                <li>Click <b>ACTIVATE PERSONAL QUOTA</b> below.</li>
+                <li>A secure Google popup will appear.</li>
+                <li>Click the <span className="px-2 py-0.5 bg-background border rounded font-bold text-foreground mx-1">Create a new key</span> button.</li>
+                <li>Follow the Google prompts to create a Free Tier project.</li>
+                <li>Once successful, the window closes and AI unlocks automatically!</li>
+              </ol>
             </div>
+          )}
 
-            <h2 className="text-4xl font-black italic tracking-tighter text-foreground mb-4">
-              {!user ? "GENIUS LOGIN" : "ACTIVATE GENIUS AI"}
-            </h2>
-            
-            <p className="text-muted-foreground font-medium text-[16px] leading-relaxed max-w-sm mb-8">
-              {!user 
-                ? "Join the elite learning platform. Login to access your personal high-speed AI tutor."
-                : "Generation Genius uses your personal Google Power to stay fast and free forever. Connect once, learn for a lifetime."}
-            </p>
-            
-            {user && (
-              <div className="w-full bg-muted/30 border border-border rounded-2xl p-6 mb-8 text-left space-y-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="text-primary font-black text-xs">01</span>
-                  </div>
-                  <p className="text-[14px] font-bold text-foreground/80">
-                    Click <b className="text-primary">ACTIVATE AI</b> to open the Google Safe-Zone.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="text-primary font-black text-xs">02</span>
-                  </div>
-                  <p className="text-[14px] font-bold text-foreground/80">
-                    Press <b className="bg-foreground text-background px-2 py-0.5 rounded leading-none">Create a new key</b> in the popup.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 opacity-60">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <Check className="w-4 h-4 text-primary" />
-                  </div>
-                  <p className="text-[13px] font-medium">Done! The Genius Engine will start instantly.</p>
-                </div>
-              </div>
-            )}
-
-            {!user ? (
-              <Button 
-                size="lg" 
-                className="w-full h-16 rounded-2xl text-[18px] font-black tracking-widest uppercase shadow-[0_10px_20px_-10px_rgba(var(--primary),0.5)] hover:scale-[1.02] transition-all bg-primary hover:bg-primary/90 text-primary-foreground group"
-                onClick={onLogin}
-              >
-                Enter the Engine
-                <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            ) : (
-              <Button 
-                size="lg" 
-                className="w-full h-16 rounded-2xl text-[18px] font-black tracking-widest uppercase shadow-[0_10px_20px_-10px_rgba(var(--primary),0.5)] hover:scale-[1.02] transition-all bg-primary hover:bg-primary/90 text-primary-foreground group"
-                onClick={onActivate}
-              >
-                Activate Genius AI
-                <Zap className="ml-2 w-5 h-5 fill-current group-hover:animate-bounce" />
-              </Button>
-            )}
-
-            {/* Security Trust Badge */}
-            <div className="mt-8 flex items-center gap-2 px-4 py-2 bg-secondary/50 rounded-full border border-border">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-                Secured by Google AI Studio Infrastructure
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-        <p className="mt-4 text-center text-[10px] text-muted-foreground/50 font-medium tracking-widest uppercase">
-          Generation Genius Elite Version 2026 • Powered by Arnav
-        </p>
-      </motion.div>
+          {!user ? (
+            <Button 
+              size="lg" 
+              className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={onLogin}
+            >
+              Login with Google
+            </Button>
+          ) : (
+            <Button 
+              size="lg" 
+              className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={onActivate}
+            >
+              Activate Personal Quota
+            </Button>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
