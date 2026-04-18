@@ -1,10 +1,18 @@
 import { GoogleGenAI } from "@google/genai";
 
-// GEMINI_API_KEY is automatically injected by the platform.
-// In AI Studio, we use process.env.GEMINI_API_KEY directly in React (Vite) apps.
-const apiKey = process.env.GEMINI_API_KEY;
+const getAIClient = () => {
+  // STRICT MODE: Only allow the injected API_KEY (selected by user).
+  // We completely remove the fallback to GEMINI_API_KEY so users cannot exhaust the app owner's quota.
+  const apiKey = typeof process !== "undefined" && process?.env?.API_KEY 
+    ? process.env.API_KEY 
+    : "";
+    
+  if (!apiKey) {
+    throw new Error("MISSING_PERSONAL_KEY");
+  }
 
-const ai = new GoogleGenAI({ apiKey: apiKey as string });
+  return new GoogleGenAI({ apiKey: apiKey as string });
+};
 
 export async function getExamHelpStream(
   prompt: string, 
@@ -163,6 +171,7 @@ End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
   contents.push({ role: "user", parts: currentMessageParts });
 
   try {
+    const ai = getAIClient();
     const response = await ai.models.generateContentStream({
       model: modelName,
       contents,
@@ -215,6 +224,7 @@ Provide the fastest possible accurate response with clear explanation and no del
   contents.push({ role: "user", parts: currentMessageParts });
 
   try {
+    const ai = getAIClient();
     const response = await ai.models.generateContent({
       model: modelName,
       contents,
