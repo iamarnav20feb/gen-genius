@@ -10,6 +10,16 @@ const getAIClient = () => {
   if (!apiKey && typeof window !== "undefined") {
     apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
   }
+  
+  // 3. INTERNAL GENIUS SYSTEM: If no key is provided by user, 
+  // we check if an internal "Genius Access Key" is marked as active in localStorage.
+  // This allows the app to use the owner's GEMINI_API_KEY but strictly through our internal quotas.
+  if (!apiKey && typeof window !== "undefined") {
+    const internalActive = localStorage.getItem("gen_genius_internal_active");
+    if (internalActive === "true") {
+      apiKey = typeof process !== "undefined" ? process?.env?.GEMINI_API_KEY : "";
+    }
+  }
     
   if (!apiKey) {
     throw new Error("MISSING_PERSONAL_KEY");

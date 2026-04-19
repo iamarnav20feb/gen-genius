@@ -28,6 +28,19 @@
         "deletedAt": { "type": "number" }
       },
       "required": ["id", "userId", "title", "messages", "createdAt"]
+    },
+    "AccessKey": {
+      "title": "AccessKey",
+      "description": "GenGenius Elite Internal Access Key",
+      "type": "object",
+      "properties": {
+        "keyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "usageCount": { "type": "integer" },
+        "lastResetTimestamp": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["keyId", "userId", "usageCount", "lastResetTimestamp", "createdAt"]
     }
   },
   "firestore": {
@@ -38,6 +51,10 @@
     "/chats/{chatId}": {
       "schema": "Chat",
       "description": "Chat sessions"
+    },
+    "/accessKeys/{keyId}": {
+      "schema": "AccessKey",
+      "description": "Internal access keys for rate limiting"
     }
   }
 }

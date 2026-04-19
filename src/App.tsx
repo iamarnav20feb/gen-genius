@@ -63,6 +63,8 @@ import {
   ShieldCheck,
   CloudOff,
   ExternalLink,
+  Shield,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -676,6 +678,7 @@ interface SidebarContentProps {
   isLoggingIn: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   handleLogout: () => void;
+  geniusKeyUsage: { count: number, limit: number } | null;
 }
 
 const SidebarContent = memo(({ 
@@ -696,7 +699,8 @@ const SidebarContent = memo(({
   loginError,
   isLoggingIn,
   setIsSettingsOpen,
-  handleLogout
+  handleLogout,
+  geniusKeyUsage
 }: SidebarContentProps) => {
   const isCollapsed = !isMobile && isSidebarCollapsed;
 
@@ -859,6 +863,23 @@ const SidebarContent = memo(({
 
         {/* Sidebar Footer (Settings & Profile) */}
         <div className="p-4 mt-auto border-t border-border space-y-2">
+          {user && geniusKeyUsage && !isCollapsed && (
+            <div className="mb-4 p-3 bg-indigo-50/50 dark:bg-indigo-950/10 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] font-black uppercase tracking-tight text-indigo-600 dark:text-indigo-400">Genius Quota</span>
+                <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">{geniusKeyUsage.count}/{geniusKeyUsage.limit}</span>
+              </div>
+              <div className="h-1.5 w-full bg-indigo-200 dark:bg-indigo-900/30 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(geniusKeyUsage.count / geniusKeyUsage.limit) * 100}%` }}
+                  className="h-full bg-indigo-500"
+                />
+              </div>
+              <p className="text-[7px] text-muted-foreground mt-1 font-medium">Resetting in 24 hours</p>
+            </div>
+          )}
+          
           <p className="text-[8px] text-center text-foreground/30 font-bold uppercase tracking-widest mb-2">made by Arnav</p>
           {!user ? (
             <div className="space-y-2">
@@ -953,22 +974,10 @@ declare global {
 }
 
 const ActivationOverlay = ({ 
-  user, 
-  onActivate, 
-  onLogin,
-  manualKey,
-  setManualKey,
-  onSaveManualKey
+  onLogin
 }: { 
-  user: any; 
-  onActivate: () => void;
   onLogin: () => void;
-  manualKey: string;
-  setManualKey: (val: string) => void;
-  onSaveManualKey: () => void;
 }) => {
-  const isAistudioEnv = typeof window !== "undefined" && !!window.aistudio?.openSelectKey;
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 overflow-y-auto">
       <Card className="w-full max-w-lg shadow-2xl border-2 border-primary/20 bg-background overflow-hidden relative my-8">
@@ -980,84 +989,23 @@ const ActivationOverlay = ({
             <Sparkles className="w-10 h-10 text-primary animate-pulse" />
           </div>
           <h2 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            {!user ? "Login Required" : "Activate Your AI"}
+            Login Required
           </h2>
           <p className="text-muted-foreground font-medium text-[15px] leading-relaxed">
-            {!user 
-              ? "Welcome to Generation GENIUS! To start learning and using the AI tutor, please login with your Google Account."
-              : "Welcome to Generation GENIUS! Connect your personal AI quota to start learning. This keeps your usage secure and unlimited."}
+            Welcome to Generation GENIUS! To start learning and using the AI tutor, please login with your Google Account.
           </p>
           
-          {user && isAistudioEnv && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-200 dark:border-blue-800 text-left w-full space-y-4">
-              <div className="flex items-center gap-2">
-                <Check className="w-5 h-5 text-blue-500 shrink-0" />
-                <span className="text-foreground font-bold">Quick Activation (Takes 1 minute):</span>
-              </div>
-              
-              <ul className="list-decimal pl-5 space-y-2 text-sm text-foreground/80">
-                <li>Click <b>ACTIVATE PERSONAL QUOTA</b> below.</li>
-                <li>A secure Google popup will appear.</li>
-                <li>Click the <span className="px-2 py-0.5 bg-background border rounded font-bold text-foreground mx-1 uppercase">Create a new key</span> button.</li>
-                <li>Once successful, the AI unlocks automatically!</li>
-              </ul>
-            </div>
-          )}
+          <Button 
+            size="lg" 
+            className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={onLogin}
+          >
+            Login with Google
+          </Button>
 
-          {user && !isAistudioEnv && (
-            <div className="bg-amber-50 dark:bg-amber-900/10 p-5 rounded-2xl border border-amber-200 dark:border-amber-800 text-left w-full space-y-4">
-              <div className="flex items-center gap-2">
-                <ExternalLink className="w-5 h-5 text-amber-500 shrink-0" />
-                <span className="text-foreground font-bold">Manual Activation Required:</span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Since you are accessing this site externally, you need to provide your own Gemini API key manually.
-              </p>
-              <div className="space-y-3">
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary font-bold hover:underline inline-flex items-center gap-1"
-                >
-                  Get your free API Key here <ExternalLink className="w-3 h-3" />
-                </a>
-                <Input 
-                  placeholder="Paste your API Key here..."
-                  className="rounded-xl border-amber-200 dark:border-amber-800 bg-background"
-                  value={manualKey}
-                  onChange={(e) => setManualKey(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-
-          {!user ? (
-            <Button 
-              size="lg" 
-              className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={onLogin}
-            >
-              Login with Google
-            </Button>
-          ) : isAistudioEnv ? (
-            <Button 
-              size="lg" 
-              className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={onActivate}
-            >
-              Activate Personal Quota
-            </Button>
-          ) : (
-            <Button 
-              size="lg" 
-              className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={onSaveManualKey}
-              disabled={!manualKey.trim()}
-            >
-              Save Key & Unlock
-            </Button>
-          )}
+          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-4">
+            Secured by Firebase Authentication
+          </p>
         </CardContent>
       </Card>
     </div>
@@ -1130,6 +1078,8 @@ function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAssistantActive, setIsAssistantActive] = useState(false);
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
+  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
+  const [geniusKeyUsage, setGeniusKeyUsage] = useState<{ id: string, count: number, limit: number } | null>(null);
   
   const [hasApiKey, setHasApiKey] = useState(true);
   const [manualKey, setManualKey] = useState("");
@@ -1137,27 +1087,78 @@ function App() {
   useEffect(() => {
     const checkApiKey = async () => {
       try {
+        if (!user) {
+          // If no user, hasApiKey doesn't matter yet as ActivationOverlay shows Login Required
+          // but we keep it true to avoid UI flickering during transision
+          setHasApiKey(true);
+          return;
+        }
+
+        // 1. Check AI Studio Environment Key
+        let aistudioHasKey = false;
         if (window.aistudio && window.aistudio.hasSelectedApiKey) {
-          const hasKey = await window.aistudio.hasSelectedApiKey();
-          setHasApiKey(hasKey);
-        } else {
-          // If we're not in AI Studio, check localStorage
-          const savedKey = localStorage.getItem("gen_genius_user_api_key");
-          if (savedKey) {
+          aistudioHasKey = await window.aistudio.hasSelectedApiKey();
+          if (aistudioHasKey) {
             setHasApiKey(true);
-          } else {
-            // If no injected process.env.API_KEY exists (for non-AI Studio serverless dev), default to false
-            setHasApiKey(!!(typeof process !== "undefined" && process?.env?.API_KEY));
+            return;
           }
         }
+
+        // 2. Check local flag (fast path)
+        const internalActive = localStorage.getItem("gen_genius_internal_active");
+        if (internalActive === "true") {
+          setHasApiKey(true);
+          // Continue to verify with Firestore in background
+        }
+        
+        // 3. Check for internal Genius key in Firestore
+        const keyDoc = await getDoc(doc(db, "accessKeys", `key_${user.uid}`));
+        if (keyDoc.exists()) {
+          const data = keyDoc.data();
+          const now = Date.now();
+          // Support legacy lastResetDate for migration
+          const lastReset = data.lastResetTimestamp || (data.lastResetDate ? new Date(data.lastResetDate).getTime() : 0);
+          const twentyFourHours = 24 * 60 * 60 * 1000;
+          
+          if (now - lastReset > twentyFourHours) {
+            setGeniusKeyUsage({ id: data.keyId, count: 0, limit: 250 });
+            // Update Firestore with new reset timestamp
+             const updatedData = {
+              usageCount: 0,
+              lastResetTimestamp: now,
+              // Ensure structural fields are present for rules validation
+              keyId: data.keyId,
+              userId: user.uid
+            };
+            setDoc(doc(db, "accessKeys", `key_${user.uid}`), updatedData, { merge: true }).catch(console.error);
+          } else {
+            setGeniusKeyUsage({ id: data.keyId, count: data.usageCount, limit: 250 });
+          }
+          
+          localStorage.setItem("gen_genius_internal_active", "true");
+          setHasApiKey(true);
+          return;
+        }
+
+        // 4. Fallback to manual key
+        const savedKey = localStorage.getItem("gen_genius_user_api_key");
+        if (savedKey) {
+          setHasApiKey(true);
+          return;
+        }
+
+        // 5. Final fallback (e.g. injected server key)
+        const envKey = !!(typeof process !== "undefined" && process?.env?.API_KEY);
+        setHasApiKey(envKey || aistudioHasKey);
+        
       } catch(e) {
         console.error("Error checking AI Studio API key:", e);
       }
     };
-    if (user && typeof window !== "undefined") {
+    if (isAuthReady) {
       checkApiKey();
     }
-  }, [user]);
+  }, [user, isAuthReady]);
 
   const handleActivateQuota = async () => {
     if (window.aistudio && window.aistudio.openSelectKey) {
@@ -1183,6 +1184,35 @@ function App() {
           setHasApiKey(false);
         }
       }
+    }
+  };
+
+  const handleGenerateGeniusKey = async () => {
+    if (!user) return;
+    setIsGeneratingKey(true);
+    try {
+      const keyId = `GENIUS-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const now = Date.now();
+      
+      const keyData = {
+        keyId,
+        userId: user.uid,
+        usageCount: 0,
+        lastResetTimestamp: now,
+        createdAt: new Date().toISOString()
+      };
+      
+      await setDoc(doc(db, "accessKeys", `key_${user.uid}`), keyData);
+      
+      localStorage.setItem("gen_genius_internal_active", "true");
+      setGeniusKeyUsage({ id: keyId, count: 0, limit: 250 });
+      setHasApiKey(true);
+      
+    } catch (error) {
+      console.error("Failed to generate Genius Key:", error);
+      alert("System error generating key. Please try again.");
+    } finally {
+      setIsGeneratingKey(false);
     }
   };
 
@@ -1461,11 +1491,24 @@ function App() {
           const localChat = prev.find(c => c.id === newChat.id);
           if (!localChat) return newChat;
 
+          // If Firestore is empty and local was not, it's likely a recent reset
+          if (newChat.messages.length === 0 && localChat.messages.length > 0) {
+            // Check if this reset was intended (by looking at timestamps or recent activity)
+            // For simplicity, we trust Firestore as the master of history when it has 0 messages 
+            // and we know a reset just happened in this session
+            return newChat;
+          }
+
           // Merge messages: keep local messages that haven't reached Firestore yet
           const mergedMessages = [...newChat.messages];
           localChat.messages.forEach(localMsg => {
             if (!mergedMessages.some(m => m.id === localMsg.id)) {
-              mergedMessages.push(localMsg);
+              // Only push local messages if they are newer than the last message in newChat
+              // to prevent resurrecting deleted/reset history
+              const lastFirestoreMsg = newChat.messages[newChat.messages.length - 1];
+              if (!lastFirestoreMsg || localMsg.timestamp > lastFirestoreMsg.timestamp) {
+                mergedMessages.push(localMsg);
+              }
             }
           });
 
@@ -1761,6 +1804,23 @@ function App() {
     setAttachedFiles([]);
     setIsLoading(true);
 
+    // QUOTA CHECK: If using internal Genius Key, verify limits
+    const internalActive = localStorage.getItem("gen_genius_internal_active") === "true";
+    if (internalActive && geniusKeyUsage) {
+      if (geniusKeyUsage.count >= geniusKeyUsage.limit) {
+        setStreamingMessage({
+          id: crypto.randomUUID(),
+          role: "model",
+          content: "⚠️ **Daily Quota Reached:** You have used your 250 questions for today. Your Genius Elite access will reset in 24 hours.",
+          timestamp: new Date(),
+          status: "error",
+          isTyping: false
+        });
+        setIsLoading(false);
+        return;
+      }
+    }
+
     const controller = new AbortController();
     setAbortController(controller);
 
@@ -1921,6 +1981,18 @@ function App() {
         }
         
         setStreamingMessage(null);
+
+        // Increment internal Genius key usage if applicable
+        if (internalActive && user && geniusKeyUsage) {
+          const newCount = geniusKeyUsage.count + 1;
+          const now = Date.now();
+          
+          setGeniusKeyUsage(prev => prev ? { ...prev, count: newCount } : null);
+          setDoc(doc(db, "accessKeys", `key_${user.uid}`), {
+            usageCount: newCount,
+            // We don't update timestamp here, it only updates when it hits a new 24h window
+          }, { merge: true }).catch(console.error);
+        }
 
         // Auto-speak if Genius Assistant is active
         if (isAssistantActive) {
@@ -2228,13 +2300,14 @@ function App() {
   };
 
   const resetChat = (id: string) => {
+    // Clear local state first for instant feedback and to prevent merge resurrection
+    setChats(prev => prev.map(c => c.id === id ? { ...c, messages: [] } : c));
+    
     if (user) {
       setIsSyncing(true);
       setDoc(doc(db, "chats", id), { messages: [], userId: user.uid }, { merge: true })
         .catch(e => handleFirestoreError(e, OperationType.WRITE, `chats/${id}`))
         .finally(() => setIsSyncing(false));
-    } else {
-      setChats(prev => prev.map(c => c.id === id ? { ...c, messages: [] } : c));
     }
     setIsResetDialogOpen(false);
     setChatToReset(null);
@@ -2290,6 +2363,7 @@ function App() {
           isLoggingIn={isLoggingIn}
           setIsSettingsOpen={setIsSettingsOpen}
           handleLogout={handleLogout}
+          geniusKeyUsage={geniusKeyUsage}
         />
       </motion.aside>
 
@@ -2324,6 +2398,7 @@ function App() {
                   isLoggingIn={isLoggingIn}
                   setIsSettingsOpen={setIsSettingsOpen}
                   handleLogout={handleLogout}
+                  geniusKeyUsage={geniusKeyUsage}
                 />
               </SheetContent>
             </Sheet>
@@ -2803,6 +2878,13 @@ function App() {
           handleLogout={handleLogout}
           handleGoogleLogin={handleGoogleLogin}
           loginError={loginError}
+          geniusKeyUsage={geniusKeyUsage}
+          onGenerateGeniusKey={handleGenerateGeniusKey}
+          isGeneratingKey={isGeneratingKey}
+          onActivateQuota={handleActivateQuota}
+          manualKey={manualKey}
+          setManualKey={setManualKey}
+          onSaveManualKey={handleSaveManualKey}
         />
 
         <ConfirmationDialog
@@ -2836,14 +2918,9 @@ function App() {
         />
       </Suspense>
 
-      {(!user || !hasApiKey) && (
+      {!user && (
         <ActivationOverlay 
-          user={user} 
-          onActivate={handleActivateQuota} 
           onLogin={handleGoogleLogin} 
-          manualKey={manualKey}
-          setManualKey={setManualKey}
-          onSaveManualKey={handleSaveManualKey}
         />
       )}
     </div>

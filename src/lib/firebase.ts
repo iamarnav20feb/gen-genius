@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -13,7 +13,11 @@ const dbId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatab
   ? firebaseConfig.firestoreDatabaseId 
   : "(default)";
 
-export const db = getFirestore(app, dbId);
+// Enabling experimentalForceLongPolling resolves 'code=unavailable' connectivity issues 
+// that often occur in restricted network environments (schools, VPNs, etc.)
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, dbId);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });

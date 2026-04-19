@@ -21,6 +21,7 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 import { User as FirebaseUser } from "firebase/auth";
+import { cn } from "@/lib/utils";
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -34,6 +35,13 @@ interface SettingsDialogProps {
   handleLogout: () => void;
   handleGoogleLogin: () => void;
   loginError: string | null;
+  geniusKeyUsage: { id: string, count: number, limit: number } | null;
+  onGenerateGeniusKey: () => void;
+  isGeneratingKey: boolean;
+  onActivateQuota: () => void;
+  manualKey: string;
+  setManualKey: (val: string) => void;
+  onSaveManualKey: () => void;
 }
 
 export default function SettingsDialog({
@@ -47,7 +55,14 @@ export default function SettingsDialog({
   setIsRecycleBinOpen,
   handleLogout,
   handleGoogleLogin,
-  loginError
+  loginError,
+  geniusKeyUsage,
+  onGenerateGeniusKey,
+  isGeneratingKey,
+  onActivateQuota,
+  manualKey,
+  setManualKey,
+  onSaveManualKey
 }: SettingsDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -72,6 +87,101 @@ export default function SettingsDialog({
                   <p className="text-xs text-foreground font-medium">{user?.email || "Not logged in"}</p>
                 </div>
               </div>
+
+              {user && (
+                <div className="grid gap-3 p-4 bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl border-2 border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Genius Elite Access</Label>
+                    {geniusKeyUsage ? (
+                      <span className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold uppercase text-[9px]">Active</span>
+                    ) : (
+                      <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase text-[9px]">Inactive</span>
+                    )}
+                  </div>
+
+                  {geniusKeyUsage ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-[9px] font-bold uppercase text-muted-foreground">Internal Access Key</Label>
+                        <code className="block w-full bg-background p-2 rounded-lg text-xs font-mono font-bold tracking-wider text-foreground border border-border">
+                          {geniusKeyUsage.id}
+                        </code>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[10px] font-bold">
+                          <span className="uppercase text-muted-foreground tracking-tight">Daily Usage Quota</span>
+                          <span className={geniusKeyUsage.count >= geniusKeyUsage.limit ? "text-red-500" : "text-primary"}>
+                            {geniusKeyUsage.count} / {geniusKeyUsage.limit}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden border border-border/50">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(100, (geniusKeyUsage.count / geniusKeyUsage.limit) * 100)}%` }}
+                            className={cn(
+                              "h-full transition-colors",
+                              geniusKeyUsage.count >= geniusKeyUsage.limit ? "bg-red-500" : "bg-primary"
+                            )}
+                          />
+                        </div>
+                        <p className="text-[8px] text-muted-foreground font-bold uppercase tracking-tight">Resets automatically every 24 hours.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-medium text-foreground/70 leading-relaxed">
+                        Generate your internal access key to bypass personal quota requirements and get up to 250 requests daily.
+                      </p>
+                      <Button 
+                        onClick={onGenerateGeniusKey}
+                        disabled={isGeneratingKey}
+                        size="sm"
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20"
+                      >
+                        {isGeneratingKey ? "Generating..." : "Generate Genius Access Key"}
+                      </Button>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
+                        <div className="relative flex justify-center text-[8px] uppercase font-black text-muted-foreground">
+                          <span className="bg-background px-2">OR</span>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline"
+                        onClick={onActivateQuota}
+                        className="w-full border-2 border-border h-9 rounded-xl font-bold text-[10px] uppercase tracking-widest"
+                      >
+                        Use Personal AI Studio Quota
+                      </Button>
+
+                      <div className="pt-2 border-t border-border/50">
+                        <Label htmlFor="manualKey" className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2 block">
+                          Manual API Key (Standard)
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="manualKey"
+                            type="password"
+                            value={manualKey}
+                            onChange={(e) => setManualKey(e.target.value)}
+                            placeholder="Enter GEMINI_API_KEY"
+                            className="bg-background border-2 border-border rounded-lg text-xs h-9 font-bold"
+                          />
+                          <Button 
+                            onClick={onSaveManualKey}
+                            disabled={!manualKey}
+                            size="sm"
+                            className="bg-accent text-accent-foreground h-9 rounded-lg font-bold text-[10px]"
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid gap-2">
                 <Label htmlFor="name" className="text-[10px] font-bold uppercase tracking-widest text-foreground">Display Name</Label>
@@ -99,39 +209,14 @@ export default function SettingsDialog({
             <Separator className="bg-border" />
 
             <div className="space-y-3">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-foreground">Data Management</h4>
-              <div className="grid grid-cols-2 gap-2">
-                <Button 
-                  variant="outline" 
-                  className="h-11 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-border text-foreground"
-                  onClick={exportAllData}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export
-                </Button>
-                <div className="relative">
-                  <Input
-                    type="file"
-                    accept=".json"
-                    onChange={importData}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                  />
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-11 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-border text-foreground"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import
-                  </Button>
-                </div>
-              </div>
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-foreground">Session Management</h4>
               <Button 
                 variant="outline" 
                 className="w-full justify-start h-11 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-border text-foreground"
                 onClick={() => setIsRecycleBinOpen(true)}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Recycle Bin
+                Recycle Bin (Deleted Chats)
               </Button>
             </div>
 
