@@ -1862,26 +1862,6 @@ function App() {
 
     const currentFiles = [...attachedFiles];
     const aiMessageId = crypto.randomUUID();
-    const aiMessage: Message = {
-      id: aiMessageId,
-      role: "model",
-      content: "",
-      timestamp: new Date(),
-      isTyping: true,
-      status: "sending"
-    };
-
-    setStreamingMessage(aiMessage);
-
-    // Ensure the message is also added to the chat messages list immediately with typing state
-    setChats(prev => prev.map(c => {
-      if (c.id === currentChatId) {
-        const exists = c.messages.some(m => m.id === aiMessageId);
-        if (exists) return c;
-        return { ...c, messages: [...c.messages, aiMessage] };
-      }
-      return c;
-    }));
 
     try {
       const chatToUse = chatsRef.current.find(c => c.id === currentChatId);
@@ -1903,13 +1883,24 @@ function App() {
       
       console.log("GenGenius: Stream received, starting iteration...");
       try {
+        // According to @google/genai SDK, generateContentStream returns an async iterator directly
         for await (const chunk of stream) {
           if (controller.signal.aborted) break;
+          // In @google/genai, chunk.text is a getter property, not a method
           const chunkText = chunk.text;
           if (chunkText) {
             console.log(`GenGenius: Received chunk (${chunkText.length} chars)`);
             fullResponse += chunkText;
-            setStreamingMessage(prev => prev ? { ...prev, content: fullResponse } : null);
+            
+            // Only after we get the first chunk, we set the streaming message
+            setStreamingMessage({
+              id: aiMessageId,
+              role: "model",
+              content: fullResponse,
+              timestamp: new Date(),
+              isTyping: true,
+              status: "sending"
+            });
           }
         }
       } catch (streamError) {
@@ -1924,7 +1915,14 @@ function App() {
           );
           if (staticText) {
             fullResponse = staticText;
-            setStreamingMessage(prev => prev ? { ...prev, content: fullResponse, isTyping: false } : { ...aiMessage, content: fullResponse, isTyping: false });
+            setStreamingMessage({
+              id: aiMessageId,
+              role: "model",
+              content: fullResponse,
+              timestamp: new Date(),
+              isTyping: false,
+              status: "sent"
+            });
           } else {
             throw new Error("No response from AI");
           }
