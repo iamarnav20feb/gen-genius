@@ -90,25 +90,38 @@ export default function SettingsDialog({
                     </p>
                     <div className="pt-2 border-t border-border/50">
                       <Label htmlFor="manualKey" className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2 block">
-                        Personal Gemini API Key
+                        {localStorage.getItem("gen_genius_user_api_key") ? "✅ Currently Linked API Key" : "Personal Gemini API Key"}
                       </Label>
                       <div className="flex gap-2">
-                        <Input
-                          id="manualKey"
-                          type="password"
-                          value={manualKey}
-                          onChange={(e) => setManualKey(e.target.value)}
-                          placeholder="Your API Key"
-                          className="bg-background border-2 border-border rounded-lg text-xs h-9 font-bold"
-                        />
-                        <Button 
-                          onClick={onSaveManualKey}
-                          disabled={!manualKey}
-                          size="sm"
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 rounded-lg font-bold text-[10px]"
-                        >
-                          Save Key
-                        </Button>
+                        {localStorage.getItem("gen_genius_user_api_key") ? (
+                          <Input
+                            id="manualKey"
+                            type="text"
+                            value={localStorage.getItem("gen_genius_user_api_key") || ""}
+                            readOnly
+                            disabled
+                            className="bg-muted/50 border-2 border-border rounded-lg text-xs h-9 font-mono opacity-100 cursor-not-allowed select-all"
+                          />
+                        ) : (
+                          <>
+                            <Input
+                              id="manualKey"
+                              type="text"
+                              value={manualKey}
+                              onChange={(e) => setManualKey(e.target.value)}
+                              placeholder="AIzaSy..."
+                              className="bg-background border-2 border-border rounded-lg text-xs h-9 font-bold"
+                            />
+                            <Button 
+                              onClick={onSaveManualKey}
+                              disabled={!manualKey}
+                              size="sm"
+                              className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 rounded-lg font-bold text-[10px]"
+                            >
+                              Save Key
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -164,8 +177,11 @@ export default function SettingsDialog({
                   variant="destructive" 
                   className="w-full justify-start h-11 rounded-xl font-bold text-xs uppercase tracking-widest"
                   onClick={() => {
+                    localStorage.removeItem("gen_genius_user_api_key");
+                    setManualKey("");
                     handleLogout();
                     onOpenChange(false);
+                    setTimeout(() => window.location.reload(), 100);
                   }}
                 >
                   <LogOut className="w-4 h-4 mr-2" />

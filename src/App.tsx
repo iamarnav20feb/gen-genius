@@ -1024,7 +1024,7 @@ const ActivationOverlay = ({
                 <div className="flex gap-2">
                   <Input
                     id="overlay-api-key"
-                    type="password"
+                    type="text"
                     value={manualKey}
                     onChange={(e) => setManualKey(e.target.value)}
                     placeholder="AIzaSy..."
@@ -1121,7 +1121,7 @@ function App() {
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
   
   const [hasApiKey, setHasApiKey] = useState(true);
-  const [manualKey, setManualKey] = useState("");
+  const [manualKey, setManualKey] = useState(() => localStorage.getItem("gen_genius_user_api_key") || "");
 
   useEffect(() => {
     const checkApiKey = () => {
@@ -1981,6 +1981,9 @@ function App() {
           errorContent = "⚠️ **Network Blocked:** I can't reach Google's AI servers. Since you are on a Chromebook, your school or network might be blocking 'generativelanguage.googleapis.com'. Try using a personal hotspot or another network.";
         } else if (errorString.includes("400") || errorString.includes("INVALID_ARGUMENT")) {
           errorContent = "⚠️ **Request Error (400):** The AI didn't like that request format. This might be due to complex file attachments or history issues. Try starting a New Session.";
+        } else {
+          // If we reached here, none of our specific filters blocked it, so log the raw error.
+          errorContent = `⚠️ **Unexpected Error:** The AI encountered a problem processing your request.\n\n**Details:** ${errorString}\n\n*If you keep seeing this, try starting a New Chat Session from the sidebar.*`;
         }
 
         const errorMessage: Message = {
