@@ -47,9 +47,10 @@ export async function getExamHelpStream(
   // ... (keep existing code for instructions)
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
+  const firstName = profile.name ? profile.name.split(' ')[0] : "";
   
-  const personaContext = profile.name ? `USER NAME: ${profile.name}\n` : "";
-  const personalityRule = profile.name ? `Address the user by their name (${profile.name}) occasionally and naturally (e.g., at the start of a conversation or when providing special encouragement). Do not over-use the name in every single response. ` : "";
+  const personaContext = firstName ? `USER NAME: ${firstName}\n` : "";
+  const personalityRule = firstName ? `Address the user by their first name (${firstName}) occasionally and naturally (e.g., at the start of a conversation or during encouragement). Do not over-use the name; mention it only when it feels impactful. Avoid using it in every response. ` : "";
   const goalsContext = profile.bio ? `PERSONAL GOALS/CONTEXT: ${profile.bio}\n` : "";
   
   const subjectRule = subject ? `\n--- STRICT SUBJECT ISOLATION: ${subject} ---\n` : "";
@@ -143,8 +144,9 @@ export async function getExamHelpStatic(
   files: { mimeType: string, data: string }[] = []
 ) {
   const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
-  const personaContext = profile.name ? `User Name: ${profile.name}. ` : "";
-  const personalityRule = profile.name ? `Address the user by their name (${profile.name}) occasionally and naturally. Do not over-use it. ` : "";
+  const firstName = profile.name ? profile.name.split(' ')[0] : "";
+  const personaContext = firstName ? `User Name: ${firstName}. ` : "";
+  const personalityRule = firstName ? `Address the user by their first name (${firstName}) occasionally and naturally. Do not over-use it. ` : "";
   const goalsContext = profile.bio ? `Context/Goals: ${profile.bio}. ` : "";
 
   const systemInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY – "GenGenius"
