@@ -49,7 +49,7 @@ export async function getExamHelpStream(
   const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
   
   const personaContext = profile.name ? `USER NAME: ${profile.name}\n` : "";
-  const personalityRule = profile.name ? `Always address the user by their name: ${profile.name}. ` : "";
+  const personalityRule = profile.name ? `Address the user by their name (${profile.name}) occasionally and naturally (e.g., at the start of a conversation or when providing special encouragement). Do not over-use the name in every single response. ` : "";
   const goalsContext = profile.bio ? `PERSONAL GOALS/CONTEXT: ${profile.bio}\n` : "";
   
   const subjectRule = subject ? `\n--- STRICT SUBJECT ISOLATION: ${subject} ---\n` : "";
@@ -144,7 +144,7 @@ export async function getExamHelpStatic(
 ) {
   const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
   const personaContext = profile.name ? `User Name: ${profile.name}. ` : "";
-  const personalityRule = profile.name ? `Always address user by name: ${profile.name}. ` : "";
+  const personalityRule = profile.name ? `Address the user by their name (${profile.name}) occasionally and naturally. Do not over-use it. ` : "";
   const goalsContext = profile.bio ? `Context/Goals: ${profile.bio}. ` : "";
 
   const systemInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY – "GenGenius"
