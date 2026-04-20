@@ -1,4 +1,4 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const getAIClient = () => {
   if (typeof window === "undefined") return null;
@@ -91,10 +91,7 @@ End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
       contents,
       config: {
         systemInstruction,
-        temperature: 0.4, // Lower temperature for more deterministic and faster token generation
-        thinkingConfig: {
-          thinkingLevel: ThinkingLevel.LOW // Minimize reasoning latency for instant answers
-        }
+        temperature: 0.7,
       },
     });
 
@@ -136,10 +133,6 @@ export async function getExamHelpStatic(
       contents,
       config: {
         systemInstruction,
-        temperature: 0.4,
-        thinkingConfig: {
-          thinkingLevel: ThinkingLevel.LOW
-        }
       }
     });
     return response.text;

@@ -188,8 +188,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
-import { ChatMessages } from "./components/ChatMessages";
-import { ChatMessage } from "./components/ChatMessage";
 const SettingsDialog = lazy(() => import("./components/SettingsDialog"));
 const RecycleBinDialog = lazy(() => import("./components/RecycleBinDialog"));
 const ConfirmationDialog = lazy(() => import("./components/ConfirmationDialog"));
@@ -201,7 +199,7 @@ interface FileAttachment {
   preview?: string;
 }
 
-export interface Message {
+interface Message {
   id: string;
   role: "user" | "model";
   content: string;
@@ -212,7 +210,7 @@ export interface Message {
   status?: "sending" | "sent" | "error";
 }
 
-export interface Chat {
+interface Chat {
   id: string;
   userId: string;
   title: string;
@@ -268,6 +266,134 @@ const GeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
 
 // --- Optimized Components ---
 
+const ChatMessage = memo(({ 
+  msg, 
+  idx, 
+  messagesCount, 
+  activeChatId, 
+  setChats, 
+  isSpeaking, 
+  speakText, 
+  handleRetry, 
+  handleSend,
+  relatedTopics 
+}: { 
+  msg: Message, 
+  idx: number, 
+  messagesCount: number,
+  activeChatId: string | null,
+  setChats: React.Dispatch<React.SetStateAction<Chat[]>>,
+  isSpeaking: string | null,
+  speakText: (text: string, id: string) => void,
+  handleRetry: () => void,
+  handleSend: (text: string) => void,
+  relatedTopics: string[]
+}) => {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+    >
+      <div className={`flex flex-col max-w-[85%] gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+        <div className={`px-4 py-3 rounded-2xl border transition-all relative group/msg ${
+          msg.role === "user" 
+            ? "bg-[#F5F5F5] dark:bg-[#111111] text-[#000000] dark:text-[#FFFFFF] border-transparent shadow-sm" 
+            : "bg-background text-foreground border-border shadow-sm"
+        }`}>
+          <div className={cn(
+            "markdown-body prose prose-sm max-w-none",
+            msg.role === "user" 
+              ? "text-[16px] font-bold leading-relaxed text-[#000000] dark:text-[#FFFFFF] prose-p:text-[#000000] dark:prose-p:text-[#FFFFFF] prose-headings:text-[#000000] dark:prose-headings:text-[#FFFFFF] prose-strong:text-[#000000] dark:prose-strong:text-[#FFFFFF]" 
+              : "prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground leading-relaxed"
+          )}>
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {msg.attachments.map((file, fIdx) => (
+                  <div key={fIdx} className="relative group">
+                    {file.preview ? (
+                      <img 
+                        src={file.preview} 
+                        alt={file.name} 
+                        className="w-20 h-20 object-cover rounded-xl border border-border shadow-sm"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 flex flex-col items-center justify-center bg-muted rounded-xl border border-border p-2 text-center">
+                        {file.type.includes('pdf') ? <FileIcon className="w-6 h-6 mb-1" /> : <Paperclip className="w-6 h-6 mb-1" />}
+                        <span className="text-[8px] font-bold truncate w-full">{file.name}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {msg.isTyping && !msg.content ? (
+              <div className="flex gap-1 items-center py-2 px-1">
+                <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1 }} className="w-2 h-2 bg-primary rounded-full" />
+                <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-2 h-2 bg-primary rounded-full" />
+                <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-2 h-2 bg-primary rounded-full" />
+              </div>
+            ) : (
+              <ReactMarkdown rehypePlugins={[rehypeRaw as any]}>{msg.content}</ReactMarkdown>
+            )}
+          </div>
+          
+          {msg.role === "model" && !msg.isTyping && (
+            <div className="absolute -right-10 top-0 opacity-0 group-hover/msg:opacity-100 transition-opacity flex flex-col gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-7 w-7 rounded-full bg-background border border-border shadow-sm",
+                  isSpeaking === msg.id && "text-primary border-primary"
+                )}
+                onClick={() => speakText(msg.content, msg.id)}
+              >
+                {isSpeaking === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {msg.status === "error" && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRetry}
+            className="mt-1 text-[10px] font-bold border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg h-7"
+          >
+            <RefreshCw className="w-3 h-3 mr-2" />
+            Retry
+          </Button>
+        )}
+
+        {msg.role === "model" && idx === messagesCount - 1 && !msg.isTyping && msg.status !== "error" && relatedTopics.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-1 flex flex-wrap gap-1.5"
+          >
+            {relatedTopics.map((topic) => (
+              <button 
+                key={topic} 
+                className="bg-background hover:bg-muted border border-border px-3 py-1 rounded-full text-[9px] font-bold transition-all text-foreground"
+                onClick={() => handleSend(`Tell me more about ${topic}`)}
+              >
+                {topic}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+});
+
+ChatMessage.displayName = "ChatMessage";
+
 const SidebarItem = memo(({ 
   chat, 
   activeChatId, 
@@ -287,11 +413,16 @@ const SidebarItem = memo(({
 }) => (
   <Tooltip key={chat.id}>
     <TooltipTrigger render={
-      <div
+      <motion.div
+        variants={{
+          hidden: { opacity: 0, x: -10 },
+          visible: { opacity: 1, x: 0 }
+        }}
+        whileHover={{ x: 4 }}
         className={cn(
           "group relative flex items-center w-full rounded-lg transition-all duration-200 cursor-pointer",
           activeChatId === chat.id 
-            ? "bg-black dark:bg-white text-white dark:text-black font-bold" 
+            ? "bg-black dark:bg-white text-white dark:text-black" 
             : "text-foreground hover:bg-muted",
           isCollapsed && "justify-center h-9"
         )}
@@ -301,9 +432,12 @@ const SidebarItem = memo(({
         }}
       >
         <div className={cn("flex-1 flex items-center min-w-0 px-3 h-9", isCollapsed && "px-0 justify-center")}>
-          <MessageSquare className={cn("w-3.5 h-3.5 shrink-0", !isCollapsed && "mr-3", activeChatId === chat.id ? "text-current" : "text-foreground/40")} />
+          <MessageSquare className={cn("w-3 h-3 shrink-0", !isCollapsed && "mr-3")} />
           {!isCollapsed && (
-            <span className="text-[11px] truncate tracking-tight">{chat.title}</span>
+            <span className={cn(
+              "text-[11px] font-bold truncate",
+              activeChatId === chat.id ? "text-white dark:text-black" : "text-foreground"
+            )}>{chat.title}</span>
           )}
         </div>
         
@@ -323,7 +457,7 @@ const SidebarItem = memo(({
             </Button>
           </div>
         )}
-      </div>
+      </motion.div>
     } />
     {isCollapsed && <TooltipContent side="right">{chat.title}</TooltipContent>}
   </Tooltip>
@@ -645,27 +779,65 @@ const SidebarContent = memo(({
         </div>
 
         {/* Sidebar Scrollable Area */}
-        <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-6 custom-scrollbar">
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={{
+            visible: {
+              transition: {
+                staggerChildren: 0.05
+              }
+            }
+          }}
+          className="flex-1 overflow-y-auto px-3 space-y-2 pb-6 custom-scrollbar"
+        >
           {/* Subjects Section */}
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {SUBJECTS.map((sub) => (
               <Tooltip key={sub.name}>
                 <TooltipTrigger render={
-                  <div
-                    className={cn(
-                      "group flex items-center h-10 w-full rounded-lg px-3 transition-colors duration-200 cursor-pointer",
-                      activeChat?.subject === sub.name 
-                        ? "bg-black text-white dark:bg-white dark:text-black font-bold" 
-                        : "text-foreground/70 hover:bg-muted"
-                    )}
-                    onClick={() => {
-                      createNewChat(undefined, sub.name);
-                      setIsSidebarOpen(false);
+                  <motion.div
+                    variants={{
+                      hidden: { opacity: 0, x: -10 },
+                      visible: { opacity: 1, x: 0 }
                     }}
+                    whileHover={{ x: 4, backgroundColor: "var(--muted)" }}
+                    whileTap={{ scale: 0.98 }}
+                    className="rounded-lg"
                   >
-                    <sub.icon className={cn("flex-shrink-0 w-4 h-4", isCollapsed ? "mx-auto" : "mr-3")} />
-                    {!isCollapsed && <span className="text-[12px] tracking-tight truncate">{sub.name}</span>}
-                  </div>
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "w-full justify-start hover:bg-transparent group transition-all duration-300 rounded-lg h-10 px-3 text-foreground relative overflow-hidden",
+                        activeChat?.subject === sub.name 
+                          ? "bg-black dark:bg-white text-white dark:text-black shadow-md" 
+                          : "text-foreground",
+                        isCollapsed && "px-0 justify-center"
+                      )}
+                      onClick={() => {
+                        createNewChat(undefined, sub.name);
+                        setIsSidebarOpen(false);
+                      }}
+                    >
+                      <sub.icon className={cn(
+                        "w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110", 
+                        !isCollapsed && "mr-3", 
+                        activeChat?.subject === sub.name ? "text-current" : sub.color
+                      )} />
+                      {!isCollapsed && (
+                        <span className="font-bold text-xs">{sub.name}</span>
+                      )}
+                      {activeChat?.subject === sub.name && (
+                        <motion.div 
+                          layoutId="active-subject-glow"
+                          className="absolute inset-0 bg-white/10 dark:bg-black/10 pointer-events-none"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      )}
+                    </Button>
+                  </motion.div>
                 } />
                 {isCollapsed && <TooltipContent side="right">{sub.name}</TooltipContent>}
               </Tooltip>
@@ -687,7 +859,7 @@ const SidebarContent = memo(({
               />
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Sidebar Footer (Settings & Profile) */}
         <div className="p-4 mt-auto border-t border-border space-y-2">
@@ -2157,11 +2329,18 @@ function App() {
   return (
     <div className={`flex h-screen w-full bg-[#FAFAFA] dark:bg-[#0a0a0a] text-foreground overflow-hidden font-sans selection:bg-black dark:selection:bg-white selection:text-white dark:selection:text-black ${theme}`}>
       {/* Desktop Sidebar */}
-      <aside 
-        className={cn(
-          "hidden md:flex border-r dark:border-white/5 bg-white dark:bg-[#0a0a0a] flex-col z-20 relative overflow-hidden transition-[width] duration-300 ease-in-out",
-          isSidebarCollapsed ? "w-20" : "w-72"
-        )}
+      <motion.aside 
+        initial={false}
+        animate={{ 
+          width: isSidebarCollapsed ? 80 : 288,
+        }}
+        transition={{ 
+          type: "spring",
+          stiffness: 300,
+          damping: 30,
+          mass: 1
+        }}
+        className="hidden md:flex border-r dark:border-white/5 bg-white dark:bg-[#0a0a0a] flex-col z-20 relative overflow-hidden"
       >
         <SidebarContent 
           isSidebarCollapsed={isSidebarCollapsed}
@@ -2183,10 +2362,10 @@ function App() {
           handleLogout={handleLogout}
           geniusKeyUsage={geniusKeyUsage}
         />
-      </aside>
+      </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full relative min-w-0 bg-background overflow-hidden">
+      <main className="flex-1 flex flex-col h-full relative min-w-0">
         {/* Header */}
         <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-background z-10">
           <div className="flex items-center space-x-4">
@@ -2553,18 +2732,88 @@ function App() {
                 exit={{ opacity: 0 }}
                 className="max-w-2xl mx-auto space-y-6 pb-12"
               >
-                <ChatMessages 
-                  messages={messages}
-                  renderedMessages={renderedMessages}
-                  streamingMessage={streamingMessage}
-                  isLoading={isLoading}
-                  activeChatId={activeChatId}
-                  setChats={setChats}
-                  isSpeaking={isSpeaking}
-                  speakText={speakText}
-                  handleSend={handleSend}
-                  relatedTopics={relatedTopics}
-                />
+                <div className="space-y-6 py-10">
+                  {messages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+                      <motion.div 
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.5 }}
+                        className="w-20 h-20 bg-muted rounded-[2rem] flex items-center justify-center text-foreground/20 shadow-inner"
+                      >
+                        <BrainCircuit className="w-10 h-10" />
+                      </motion.div>
+                      <div className="space-y-2">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">GenGenius</h2>
+                        <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-[0.2em]">Select a subject to start learning</p>
+                      </div>
+                    </div>
+                  )}
+                  {renderedMessages.map((msg, idx) => (
+                    <ChatMessage 
+                      key={msg.id}
+                      msg={msg}
+                      idx={idx}
+                      messagesCount={renderedMessages.length}
+                      activeChatId={activeChatId}
+                      setChats={setChats}
+                      isSpeaking={isSpeaking}
+                      speakText={speakText}
+                      handleRetry={() => handleSend(msg.content)}
+                      handleSend={handleSend}
+                      relatedTopics={relatedTopics}
+                    />
+                  ))}
+                  
+                  {streamingMessage && (
+                    <ChatMessage 
+                      msg={streamingMessage}
+                      idx={renderedMessages.length}
+                      messagesCount={renderedMessages.length + 1}
+                      activeChatId={activeChatId}
+                      setChats={setChats}
+                      isSpeaking={isSpeaking}
+                      speakText={speakText}
+                      handleRetry={() => {}}
+                      handleSend={handleSend}
+                      relatedTopics={[]}
+                    />
+                  )}
+                </div>
+                
+                {isLoading && !streamingMessage && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    className="flex justify-start"
+                  >
+                    <div className="flex flex-col space-y-2">
+                      <div className="flex items-center space-x-2 px-5 py-3 bg-muted/30 rounded-2xl border border-border/50">
+                        <div className="flex space-x-1.5">
+                          {[0, 1, 2].map((i) => (
+                            <motion.div 
+                              key={i}
+                              animate={{ 
+                                scale: [1, 1.5, 1],
+                                opacity: [0.4, 1, 0.4]
+                              }}
+                              transition={{ 
+                                repeat: Infinity, 
+                                duration: 1, 
+                                delay: i * 0.2,
+                                ease: "easeInOut"
+                              }}
+                              className="w-1.5 h-1.5 bg-primary rounded-full" 
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary/60 ml-2">
+                          Genius is thinking...
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
