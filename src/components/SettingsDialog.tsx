@@ -154,6 +154,18 @@ export default function SettingsDialog({
             <Separator className="bg-border" />
 
             <div className="space-y-3">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-foreground">Session Management</h4>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start h-11 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-border text-foreground"
+                onClick={() => setIsRecycleBinOpen(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Recycle Bin (Deleted Chats)
+              </Button>
+            </div>
+
+            <div className="space-y-3">
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-foreground">Account</h4>
               {loginError && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl mb-3">
