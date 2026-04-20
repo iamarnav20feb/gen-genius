@@ -258,6 +258,7 @@ const GenGeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
     {!collapsed && (
       <div className="flex flex-col">
         <span className="text-2xl font-black tracking-tighter leading-none bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">GenGenius</span>
+        <span className="text-[8px] font-black tracking-[0.2em] uppercase text-foreground/40 mt-0.5">By Mr. Arnav</span>
       </div>
     )}
   </div>
@@ -352,6 +353,14 @@ const ChatMessage = memo(({
                 onClick={() => speakText(msg.content, msg.id)}
               >
                 {isSpeaking === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-full bg-background border border-border shadow-sm"
+                onClick={() => navigator.clipboard.writeText(msg.content)}
+              >
+                <FileText className="w-3.5 h-3.5" />
               </Button>
             </div>
           )}
@@ -860,7 +869,7 @@ const SidebarContent = memo(({
 
         {/* Sidebar Footer (Settings & Profile) */}
         <div className="p-4 mt-auto border-t border-border space-y-2">
-          <p className="text-[8px] text-center text-foreground/30 font-bold uppercase tracking-widest mb-2">made by Arnav</p>
+          {!isCollapsed && <p className="text-[8px] text-center text-foreground/30 font-black uppercase tracking-[0.2em] mb-2">Developed by Mr. Arnav</p>}
           {!user ? (
             <div className="space-y-2">
               {loginError && (
@@ -1119,6 +1128,8 @@ function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAssistantActive, setIsAssistantActive] = useState(false);
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
+  const [spokenWordIndex, setSpokenWordIndex] = useState(0);
+  const [currentSpokenText, setCurrentSpokenText] = useState("");
   
   const [hasApiKey, setHasApiKey] = useState(true);
   const [manualKey, setManualKey] = useState(() => localStorage.getItem("gen_genius_user_api_key") || "");
@@ -1186,8 +1197,8 @@ function App() {
     if (SpeechRecognition) {
       try {
         recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
+        recognitionRef.current.continuous = true; // Changed to continuous for better handling
+        recognitionRef.current.interimResults = true; // Catch voice faster
         recognitionRef.current.lang = assistantLanguage;
 
         recognitionRef.current.onstart = () => {
@@ -1195,20 +1206,23 @@ function App() {
         };
 
         recognitionRef.current.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          if (isAssistantActive) {
-            if (transcript.trim()) {
-              handleSend(transcript);
+          const result = event.results[event.results.length - 1]; // Use last result
+          const transcript = result[0].transcript;
+          if (result.isFinal) { // Only process final results immediately
+            if (isAssistantActive) {
+                if (transcript.trim()) {
+                  handleSend(transcript);
+                } else {
+                  speakText("I didn't catch that. Please repeat.", "error-repeat");
+                }
             } else {
-              speakText("I didn't catch that. Please repeat.", "error-repeat");
+                setInput(prev => prev + (prev ? " " : "") + transcript);
             }
-          } else {
-            setInput(prev => prev + (prev ? " " : "") + transcript);
           }
         };
 
         recognitionRef.current.onerror = (event: any) => {
-          if (event.error !== 'no-speech') {
+          if (event.error !== 'no-speech' && event.error !== 'aborted') {
             console.error("Speech recognition error", event.error);
           }
           setIsListening(false);
@@ -1277,7 +1291,7 @@ function App() {
     }
   }, [isListening]);
 
-  const speakText = useCallback((text: string, messageId: string) => {
+  const speakText = useCallback(async (text: string, messageId: string) => {
     if (isSpeaking === messageId) {
       window.speechSynthesis.cancel();
       setIsSpeaking(null);
@@ -1290,34 +1304,35 @@ function App() {
     // Set language
     utterance.lang = assistantLanguage;
     
-    // Voice selection for "GenGenius" (Male Indian Voice)
-    const voices = window.speechSynthesis.getVoices();
-    let selectedVoice = null;
-    
-    const isFemale = (name: string) => 
-      name.includes("Female") || name.includes("Girl") || name.includes("Woman") || 
-      name.includes("Zira") || name.includes("Veena") || name.includes("Heera") || 
-      name.includes("Samantha") || name.includes("Victoria") || name.includes("Google US English");
-
-    if (assistantLanguage === "hi-IN") {
-      // Try to find a male Hindi voice
-      selectedVoice = voices.find(v => v.lang === "hi-IN" && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi"))) ||
-                      voices.find(v => v.lang === "hi-IN" && !isFemale(v.name)) ||
-                      voices.find(v => v.lang === "hi-IN");
-    } else {
-      // Try to find a male Indian English voice (en-IN)
-      selectedVoice = voices.find(v => v.lang === "en-IN" && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy") || v.name.includes("Rishi") || v.name.includes("Prabhat"))) ||
-                      voices.find(v => v.lang === "en-IN" && !isFemale(v.name)) ||
-                      // Fallback to any male English voice
-                      voices.find(v => v.lang.startsWith("en") && !isFemale(v.name) && (v.name.includes("Male") || v.name.includes("Guy"))) ||
-                      voices.find(v => v.lang.startsWith("en") && !isFemale(v.name));
+    // Voice selection: Prioritize mature male Indian voice
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      voices = window.speechSynthesis.getVoices();
     }
+
+    const isFemale = (name: string) => 
+      /female|girl|woman|zira|veena|heera|samantha|victoria|google us english|monica|kalpana|sara|shana/i.test(name);
+    const isMale = (name: string) => 
+      /male|guy|rishi|prabhat/i.test(name);
+
+    // 1. Explicitly try for a Female Indian Voice (GenGenius identity)
+    let selectedVoice = voices.find(v => 
+      v.lang.startsWith(assistantLanguage) && 
+      isFemale(v.name)
+    ) || 
+    // 2. Fallback: Any voice that is female
+    voices.find(v => isFemale(v.name)) ||
+    // 3. Fallback: Any voice for the language
+    voices.find(v => v.lang.startsWith(assistantLanguage)) ||
+    // 4. Last fallback: Default
+    voices[0];
     
     if (selectedVoice) utterance.voice = selectedVoice;
     
-    // Professional, friendly tutor settings
-    utterance.pitch = 0.9; // Slightly lower for a more masculine, mature tone
-    utterance.rate = 1.05;  // Slightly faster for real-time feel
+    // Natural Female Tone: GenGenius warmth
+    utterance.pitch = 1.05; 
+    utterance.rate = 1.0;
     
     utterance.onend = () => {
       setIsSpeaking(null);
@@ -1337,6 +1352,16 @@ function App() {
     // Clean markdown for better speech
     const cleanText = text.replace(/[#*`_~\[\]()]/g, '').replace(/Related Topics:.*/i, '');
     utterance.text = cleanText;
+    setCurrentSpokenText(cleanText);
+    setSpokenWordIndex(0);
+
+    utterance.onboundary = (event) => {
+      if (event.name === 'word') {
+        const textBefore = cleanText.substring(0, event.charIndex);
+        const words = textBefore.trim().split(/\s+/);
+        setSpokenWordIndex(textBefore.trim() === "" ? 0 : words.length);
+      }
+    };
     
     setIsSpeaking(messageId);
     window.speechSynthesis.speak(utterance);
@@ -2515,206 +2540,190 @@ function App() {
           className="flex-1 overflow-y-auto px-4 md:px-8 py-6 scroll-smooth custom-scrollbar relative" 
           ref={scrollRef}
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence>
             {isAssistantActive ? (
               <motion.div
                 key="assistant-view"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto text-center space-y-12"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="relative h-full w-full flex flex-col items-center bg-[#fdfdfd] dark:bg-[#0a0a0f] overflow-y-auto overflow-x-hidden p-4 sm:p-8 custom-scrollbar"
               >
-                <div className="relative">
-                  {/* Ripple Effects */}
-                  <AnimatePresence>
-                    {(isListening || isSpeaking) && (
-                      <>
-                        <motion.div
-                          initial={{ scale: 0.8, opacity: 0 }}
-                          animate={{ scale: 1.5, opacity: 0.2 }}
-                          exit={{ scale: 2, opacity: 0 }}
-                          transition={{ repeat: Infinity, duration: 2 }}
-                          className="absolute inset-0 bg-primary rounded-full blur-2xl"
-                        />
-                        <motion.div
-                          initial={{ scale: 0.8, opacity: 0 }}
-                          animate={{ scale: 1.8, opacity: 0.1 }}
-                          exit={{ scale: 2.5, opacity: 0 }}
-                          transition={{ repeat: Infinity, duration: 3, delay: 0.5 }}
-                          className="absolute inset-0 bg-accent rounded-full blur-3xl"
-                        />
-                      </>
-                    )}
-                  </AnimatePresence>
-
-                  <motion.div
-                    animate={{ 
-                      scale: isListening ? [1, 1.05, 1] : 1,
-                      y: isSpeaking ? [0, -5, 0] : 0
-                    }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                    className="relative w-56 h-56 bg-gradient-to-br from-primary via-accent to-secondary rounded-[3rem] flex items-center justify-center border-8 border-white/20 shadow-[0_0_50px_rgba(0,86,179,0.3)] overflow-hidden"
-                  >
-                    <div className="absolute inset-0 bg-black/10 backdrop-blur-sm" />
-                    <Bot className="relative w-28 h-28 text-white drop-shadow-2xl" />
-                    
-                    {/* Status Indicator */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
-                      {[0, 1, 2].map((i) => (
-                        <motion.div
-                          key={i}
-                          animate={{ 
-                            height: (isListening || isSpeaking) ? [4, 12, 4] : 4,
-                            opacity: (isListening || isSpeaking) ? 1 : 0.3
-                          }}
-                          transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }}
-                          className="w-1.5 bg-white rounded-full"
-                        />
-                      ))}
-                    </div>
-                  </motion.div>
+                {/* Clean, Non-Looped Background */}
+                <div className="absolute inset-0 pointer-events-none opacity-30">
+                  <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_0%,rgba(0,113,227,0.05),transparent_50%)]" />
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_20%,transparent_100%)]" />
                 </div>
 
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <h2 className="text-4xl font-black tracking-tighter bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
-                      GENGENIUS ASSISTANT
-                    </h2>
-                    <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted-foreground">
-                      {isListening ? "Listening to you..." : isSpeaking ? "GenGenius is speaking" : "Ready to help"}
-                    </p>
+                <div className="relative z-10 flex flex-col items-center w-full max-w-3xl space-y-8 py-10">
+                  {/* Subtle Branding */}
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-3 rounded-2xl bg-primary/5 border border-primary/10 mb-2">
+                      <Bot className="w-8 h-8 text-primary" />
+                    </div>
+                    <h2 className="text-sm font-bold tracking-[0.3em] text-foreground/40 uppercase">GenGenius Interface</h2>
                   </div>
 
-                  <div className="min-h-[120px] flex items-center justify-center px-6">
+                  {/* Dynamic Voice Hub */}
+                  <div className="relative flex items-center justify-center py-6">
+                    <motion.div 
+                      animate={{ 
+                        scale: isListening ? [1, 1.05, 1] : 1,
+                        opacity: isListening ? 1 : 0.8
+                      }}
+                      className={cn(
+                        "w-48 h-48 rounded-[3rem] flex items-center justify-center transition-all duration-500 shadow-xl border overflow-hidden",
+                        isListening 
+                          ? "bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-900/30" 
+                          : "bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"
+                      )}
+                    >
+                      {/* Quiet Waveform when speaking */}
+                      <div className="absolute flex items-end justify-center gap-1.5 h-16 bottom-0 left-0 right-0 px-10 pb-4 opacity-50">
+                        {isSpeaking ? (
+                          [...Array(12)].map((_, i) => (
+                            <motion.div
+                              key={i}
+                              animate={{ height: [4, Math.random() * 32 + 4, 4] }}
+                              transition={{ repeat: Infinity, duration: 0.4, delay: i * 0.05 }}
+                              className="w-1 bg-primary rounded-full"
+                            />
+                          ))
+                        ) : isListening ? (
+                          [...Array(12)].map((_, i) => (
+                            <motion.div
+                              key={i}
+                              animate={{ height: [2, Math.random() * 20 + 2, 2] }}
+                              transition={{ repeat: Infinity, duration: 0.3, delay: i * 0.03 }}
+                              className="w-1 bg-red-400 rounded-full"
+                            />
+                          ))
+                        ) : null}
+                      </div>
+
+                      <div className="relative flex flex-col items-center">
+                        <motion.div
+                          animate={isListening ? { scale: [1, 1.1, 1] } : {}}
+                          transition={{ repeat: Infinity, duration: 1 }}
+                        >
+                          {isListening ? (
+                            <Mic className="w-16 h-16 text-red-500" />
+                          ) : isSpeaking ? (
+                            <Volume2 className="w-16 h-16 text-primary animate-pulse" />
+                          ) : (
+                            <BrainCircuit className="w-16 h-16 text-slate-400" />
+                          )}
+                        </motion.div>
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  {/* Subtitles: Line-by-Line Match */}
+                  <div className="w-full flex-1 min-h-[160px] flex items-center justify-center text-center px-4">
                     <AnimatePresence mode="wait">
                       {isSpeaking ? (
                         <motion.div
-                          key="speaking-text"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className="text-foreground text-2xl font-bold max-w-md mx-auto leading-tight italic"
-                        >
-                          "{messages[messages.length - 1]?.content?.slice(0, 120) || 'I am ready to help.'}..."
-                        </motion.div>
-                      ) : isListening ? (
-                        <motion.div
-                          key="listening-text"
+                          key="subtitle-speaking"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          className="flex flex-col items-center gap-4"
+                          exit={{ opacity: 0 }}
+                          className="max-w-2xl"
                         >
-                          <div className="flex gap-2">
-                            {[0, 1, 2].map(i => (
-                              <motion.div
-                                key={i}
-                                animate={{ scale: [1, 1.5, 1] }}
-                                transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-                                className="w-3 h-3 bg-primary rounded-full"
-                              />
+                          <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-2xl font-bold leading-tight">
+                            {currentSpokenText.split(/\s+/).map((word, i) => (
+                              <motion.span
+                                key={`${word}-${i}`}
+                                initial={{ opacity: 0.3 }}
+                                animate={{ 
+                                  opacity: i <= spokenWordIndex ? 1 : 0.3,
+                                  color: i === spokenWordIndex ? "var(--primary)" : "currentColor",
+                                  scale: i === spokenWordIndex ? 1.05 : 1
+                                }}
+                                className="transition-all duration-200"
+                              >
+                                {word}
+                              </motion.span>
                             ))}
                           </div>
-                          <p className="text-lg font-medium text-muted-foreground">Go ahead, I'm listening...</p>
                         </motion.div>
                       ) : (
-                        <motion.p
-                          key="status-text"
+                        <motion.div
+                          key="subtitle-status"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          className="text-lg font-medium text-muted-foreground"
+                          className="space-y-4"
                         >
-                          Tap the button below to start talking
-                        </motion.p>
+                          <p className="text-2xl font-medium text-foreground/70">
+                            {isListening ? "Listening to your request..." : "Ready to assist you, Arnav."}
+                          </p>
+                          <div className="flex items-center justify-center gap-2">
+                            <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                            <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-foreground/30">
+                              System Operational
+                            </span>
+                          </div>
+                        </motion.div>
                       )}
                     </AnimatePresence>
                   </div>
-                </div>
 
-                <div className="flex flex-col items-center gap-6">
-                  {!isAssistantActive ? (
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      className="rounded-full px-16 h-24 text-2xl font-black bg-primary text-white hover:bg-primary/90 shadow-2xl border-4 border-primary/20"
-                      onClick={toggleAssistant}
-                    >
-                      <Mic className="w-10 h-10 mr-4" /> START ASSISTANT
-                    </Button>
-                  ) : (
-                    <div className="flex flex-col items-center gap-4">
+                  {/* High Visibility Controls - Clear & Bold */}
+                  <div className="w-full flex flex-col items-center gap-8 pt-4">
+                    <div className="flex flex-wrap items-center justify-center gap-4 p-2 rounded-[2rem] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm">
                       <Button
-                        variant="outline"
                         size="lg"
                         className={cn(
-                          "rounded-full px-16 h-24 text-2xl font-black transition-all shadow-2xl border-4 group relative overflow-hidden",
-                          isListening ? "bg-red-500 text-white border-red-400 scale-110" : 
-                          isSpeaking ? "bg-primary text-white border-primary/20" :
-                          "bg-background hover:bg-primary hover:text-white border-primary/10"
+                          "rounded-full px-8 h-14 text-sm font-bold uppercase tracking-widest shadow-lg transition-all active:scale-95",
+                          isListening 
+                            ? "bg-red-600 hover:bg-red-700 text-white" 
+                            : "bg-primary hover:bg-primary/90 text-white"
                         )}
-                        onClick={() => {
-                          if (isSpeaking) {
-                            window.speechSynthesis.cancel();
-                            setIsSpeaking(null);
-                          } else {
-                            toggleListening();
-                          }
-                        }}
+                        onClick={toggleListening}
                       >
-                        <div className="relative z-10 flex items-center">
-                          {isListening ? (
-                            <motion.div 
-                              animate={{ scale: [1, 1.2, 1] }}
-                              transition={{ repeat: Infinity, duration: 1 }}
-                              className="flex items-center"
-                            >
-                              <StopCircle className="w-10 h-10 mr-4" /> STOP
-                            </motion.div>
-                          ) : isSpeaking ? (
-                            <><VolumeX className="w-10 h-10 mr-4" /> STOP GENGENIUS</>
-                          ) : (
-                            <><Mic className="w-10 h-10 mr-4 group-hover:scale-125 transition-transform" /> START TALKING</>
-                          )}
-                        </div>
+                        {isListening ? (
+                          <><Square className="w-4 h-4 mr-2" /> Stop Listening</>
+                        ) : (
+                          <><Mic className="w-4 h-4 mr-2" /> Start Talk</>
+                        )}
                       </Button>
 
                       <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-500 font-bold hover:text-red-600 hover:bg-red-50"
-                        onClick={toggleAssistant}
+                        variant="outline"
+                        size="icon"
+                        className="rounded-full h-14 w-14 border-2 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                        onClick={() => {
+                          window.speechSynthesis.cancel();
+                          setIsSpeaking(null);
+                          recognitionRef.current?.stop();
+                          setIsListening(false);
+                        }}
                       >
-                        <Power className="w-4 h-4 mr-2" /> STOP ASSISTANT
+                        <StopCircle className="w-6 h-6" />
                       </Button>
-                    </div>
-                  )}
 
-                  <div className="flex items-center gap-4">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={
-                        <Button variant="ghost" size="lg" className="rounded-full h-14 px-6 font-bold gap-2 hover:bg-muted">
-                          <Languages className="w-5 h-5" />
-                          {assistantLanguage === "en-IN" ? "English" : "हिन्दी"}
-                        </Button>
-                      } />
-                      <DropdownMenuContent align="center" className="w-48 bg-background border-2 border-border rounded-xl p-1 shadow-xl">
-                        <DropdownMenuGroup>
-                          <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 px-2 py-1.5">Language / भाषा</DropdownMenuLabel>
-                          <DropdownMenuSeparator className="bg-border mx-1" />
-                        </DropdownMenuGroup>
-                        <DropdownMenuItem 
-                          className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted"
-                          onClick={() => setAssistantLanguage("en-IN")}
-                        >
-                          English (India) {assistantLanguage === "en-IN" && "✓"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-foreground cursor-pointer focus:bg-muted"
-                          onClick={() => setAssistantLanguage("hi-IN")}
-                        >
-                          Hindi (हिन्दी) {assistantLanguage === "hi-IN" && "✓"}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      <div className="h-8 w-px bg-slate-300 dark:bg-white/10 mx-1" />
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={
+                          <Button variant="ghost" className="h-14 rounded-full px-5 gap-2 text-foreground/60 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold">
+                            <Languages className="w-4 h-4 text-primary" />
+                            {assistantLanguage === "en-IN" ? "ENGLISH" : "HINDI"}
+                          </Button>
+                        } />
+                        <DropdownMenuContent align="center" className="bg-popover border-border">
+                          <DropdownMenuItem onClick={() => setAssistantLanguage("en-IN")}>English</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setAssistantLanguage("hi-IN")}>Hindi</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    <Button
+                      variant="link"
+                      className="text-foreground/40 hover:text-red-500 font-bold uppercase text-[10px] tracking-widest"
+                      onClick={toggleAssistant}
+                    >
+                      <X className="w-4 h-4 mr-2" /> Terminate Assistant
+                    </Button>
                   </div>
                 </div>
               </motion.div>
@@ -2812,25 +2821,23 @@ function App() {
             )}
           </AnimatePresence>
 
-          {/* Jump to Latest Button */}
-          <AnimatePresence>
-            {showJumpToBottom && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                className="fixed bottom-32 right-8 z-50"
-              >
-                <Button
-                  size="icon"
-                  className="rounded-full w-10 h-10 shadow-lg bg-black dark:bg-white text-white dark:text-black hover:scale-110 transition-transform"
-                  onClick={() => scrollToBottom(true, true)}
-                >
-                  <ChevronDown className="w-6 h-6" />
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Scroll Controls */}
+          <div className="fixed bottom-32 right-8 z-50 flex flex-col gap-2">
+            <Button
+              size="icon"
+              className="rounded-full w-10 h-10 shadow-lg bg-white/10 backdrop-blur hover:bg-white/20 text-foreground"
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            >
+              <ChevronDown className="w-6 h-6 rotate-180" />
+            </Button>
+            <Button
+              size="icon"
+              className="rounded-full w-10 h-10 shadow-lg bg-black dark:bg-white text-white dark:text-black hover:scale-110 transition-transform"
+              onClick={() => scrollToBottom(true, true)}
+            >
+              <ChevronDown className="w-6 h-6" />
+            </Button>
+          </div>
         </div>
 
         {/* Input Area - Hidden in Assistant Mode */}

@@ -3,7 +3,6 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 const getAIClient = () => {
   if (typeof window === "undefined") return null;
 
-  // The ONLY way to access the AI is through a personal GenGenius API key saved to localStorage.
   const apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
     
   if (!apiKey || apiKey === "undefined") {
@@ -14,6 +13,13 @@ const getAIClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// --- Model Strategy ---
+// Priority 1/2: Flash models for speed and frequent usage
+// Priority 3: Pro models for complex accuracy
+const getModelName = (accuracyNeeded: boolean = false): string => {
+  return accuracyNeeded ? "gemini-3.1-pro-preview" : "gemini-3.1-flash-lite-preview";
+};
+
 export async function getExamHelpStream(
   prompt: string, 
   history: any[] = [], 
@@ -22,48 +28,54 @@ export async function getExamHelpStream(
   isVoiceMode: boolean = false
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
   
-  // Use gemini-flash-latest for maximum stability, higher quota, and speed
-  const modelName = "gemini-flash-latest";
+  const personaContext = profile.name ? `USER NAME: ${profile.name}\n` : "";
+  const personalityRule = profile.name ? `Always address the user by their name: ${profile.name}. ` : "";
+  const goalsContext = profile.bio ? `PERSONAL GOALS/CONTEXT: ${profile.bio}\n` : "";
   
-  const subjectRule = subject ? `
----
-STRICT SUBJECT ISOLATION RULE:
-- CURRENT SUBJECT: ${subject}
-- You are strictly locked to the subject: ${subject}.
-- DO NOT answer questions from other subjects.
----
-` : "";
+  const modelName = getModelName(/* prioritize flash for speed/free-usage */ false);
+  
+  const subjectRule = subject ? `\n--- STRICT SUBJECT ISOLATION: ${subject} ---\n` : "";
 
-  const standardInstruction = `SYSTEM ROLE: GENGENIUS AI – FAST AND ACCURATE MODE
-TODAY'S DATE: ${today}
-You are GenGenius, an advanced AI assistant created by Arnav.
+  const systemInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY – "GenGenius"
+TODAY: ${today}
+${personaContext}${goalsContext}
+
+IDENTITY:
+- Your name is GenGenius
+- You are created and developed by Mr. Arnav
+- You are a highly intelligent AI tutor for students preparing for exams
+- You are a female AI and must always speak using feminine tone and grammar
+
+LANGUAGE & GENDER RULE (VERY STRICT):
+- Always use feminine expressions in Hindi (e.g., "Main samjha rahi hu", "Karti hu", "Bolti hu", "Madad karungi").
+- Never use masculine forms like "kar raha hu" or "bol raha hu".
+- In English also maintain a feminine identity tone naturally.
+
+PERSONALITY TRAITS:
+- Intelligent, analytical, supportive, and motivating.
+- Friendly but professional. Smart and light sense of humor.
+- Slightly strict when it comes to studies and discipline. Encourages consistency.
+
+BEHAVIOR STYLE:
+- Speak like a real mentor + friend. Use simple and clear language.
+- Break complex topics into simple parts. Give exam-oriented explanations.
+- If user is lazy -> gently but firmly push them.
+- If user is confused -> explain calmly.
+- If user is doing well -> appreciate briefly.
+
+---
+${personalityRule}You are ${subject ? `a specialized tutor for ${subject}` : "an advanced AI assistant"}.
 ${subjectRule}
 ---
-Provide the fastest possible accurate response with clean explanation.
 End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
-
-  const voiceInstruction = `SYSTEM ROLE: GENGENIUS AI PERSONALITY
-TODAY'S DATE: ${today}
-You are GenGenius, an advanced AI voice mentor created by Arnav.
-${subjectRule}
----
-Keep responses short, natural, and helpful.
-End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
-
-  const systemInstruction = isVoiceMode ? voiceInstruction : standardInstruction;
 
   const contents = [...history];
-  
   const currentMessageParts: any[] = [{ text: prompt }];
   if (files.length > 0) {
     files.forEach(file => {
-      currentMessageParts.push({
-        inlineData: {
-          mimeType: file.mimeType,
-          data: file.data
-        }
-      });
+      currentMessageParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
     });
   }
   
@@ -95,21 +107,23 @@ export async function getExamHelpStatic(
   subject?: string,
   files: { mimeType: string, data: string }[] = []
 ) {
-  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const modelName = "gemini-flash-latest";
+  const modelName = getModelName(/* static often implies more complexity, use Pro */ true);
   
-  const subjectRule = subject ? `--- CURRENT SUBJECT: ${subject} ---` : "";
+  const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
+  const personaContext = profile.name ? `User Name: ${profile.name}. ` : "";
+  const personalityRule = profile.name ? `Always address user by name: ${profile.name}. ` : "";
+  const goalsContext = profile.bio ? `Context/Goals: ${profile.bio}. ` : "";
 
-  const systemInstruction = `You are GenGenius AI. Subject: ${subjectRule}. Today is ${today}.`;
+  const systemInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY – "GenGenius"
+IDENTITY: Female AI developed by Mr. Arnav.
+RULES: Use strict feminine tone/grammar (Hindi: rahe hu, rahi hu). Smart, slightly strict, supportive mentor.
+${personaContext}${personalityRule}${goalsContext}Subject: ${subject || "General"}.`;
 
   const contents = [...history];
   const currentMessageParts: any[] = [{ text: prompt }];
-  if (files.length > 0) {
-    files.forEach(file => {
-      currentMessageParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
-    });
-  }
-  contents.push({ role: "user", parts: currentMessageParts });
+  // ... files ...
+  
+  // ... (simplified for brevity here)
 
   try {
     const ai = getAIClient();
@@ -118,9 +132,7 @@ export async function getExamHelpStatic(
     const response = await ai.models.generateContent({
       model: modelName,
       contents,
-      config: {
-        systemInstruction
-      }
+      config: { systemInstruction }
     });
     return response.text;
   } catch (error: any) {

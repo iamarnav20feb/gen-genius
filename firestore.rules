@@ -13,10 +13,13 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      function isChatOwner() { 
+        return request.auth != null && resource != null && resource.data.userId == request.auth.uid;
+      }
+      allow read: if isChatOwner();
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update: if isChatOwner() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isChatOwner();
     }
 
     match /accessKeys/{keyId} {
