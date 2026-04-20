@@ -863,23 +863,6 @@ const SidebarContent = memo(({
 
         {/* Sidebar Footer (Settings & Profile) */}
         <div className="p-4 mt-auto border-t border-border space-y-2">
-          {user && geniusKeyUsage && !isCollapsed && (
-            <div className="mb-4 p-3 bg-indigo-50/50 dark:bg-indigo-950/10 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[9px] font-black uppercase tracking-tight text-indigo-600 dark:text-indigo-400">Genius Quota</span>
-                <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">{geniusKeyUsage.count}/{geniusKeyUsage.limit}</span>
-              </div>
-              <div className="h-1.5 w-full bg-indigo-200 dark:bg-indigo-900/30 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(geniusKeyUsage.count / geniusKeyUsage.limit) * 100}%` }}
-                  className="h-full bg-indigo-500"
-                />
-              </div>
-              <p className="text-[7px] text-muted-foreground mt-1 font-medium">Resetting in 24 hours</p>
-            </div>
-          )}
-          
           <p className="text-[8px] text-center text-foreground/30 font-bold uppercase tracking-widest mb-2">made by Arnav</p>
           {!user ? (
             <div className="space-y-2">
@@ -1879,6 +1862,26 @@ function App() {
 
     const currentFiles = [...attachedFiles];
     const aiMessageId = crypto.randomUUID();
+    const aiMessage: Message = {
+      id: aiMessageId,
+      role: "model",
+      content: "",
+      timestamp: new Date(),
+      isTyping: true,
+      status: "sending"
+    };
+
+    setStreamingMessage(aiMessage);
+
+    // Ensure the message is also added to the chat messages list immediately with typing state
+    setChats(prev => prev.map(c => {
+      if (c.id === currentChatId) {
+        const exists = c.messages.some(m => m.id === aiMessageId);
+        if (exists) return c;
+        return { ...c, messages: [...c.messages, aiMessage] };
+      }
+      return c;
+    }));
 
     try {
       const chatToUse = chatsRef.current.find(c => c.id === currentChatId);
@@ -1887,6 +1890,7 @@ function App() {
         parts: [{ text: m.content }],
       })) : [];
 
+      console.log("GenGenius: Calling AI stream...");
       const stream = await getExamHelpStream(
         finalPrompt || "Analyze the attached files.", 
         history, 
@@ -1897,17 +1901,6 @@ function App() {
       
       let fullResponse = "";
       
-      const aiMessage: Message = {
-        id: aiMessageId,
-        role: "model",
-        content: "",
-        timestamp: new Date(),
-        isTyping: true,
-        status: "sending"
-      };
-
-      setStreamingMessage(aiMessage);
-
       console.log("GenGenius: Stream received, starting iteration...");
       try {
         for await (const chunk of stream) {
@@ -1922,15 +1915,22 @@ function App() {
       } catch (streamError) {
         console.warn("GenGenius: Streaming failed, trying static fallback...", streamError);
         // Fallback to static if streaming is blocked by network
-        const staticText = await getExamHelpStatic(
-          finalPrompt || "Analyze the attached files.",
-          history,
-          currentSubject,
-          currentFiles.map(f => ({ mimeType: f.type, data: f.data }))
-        );
-        if (staticText) {
-          fullResponse = staticText;
-          setStreamingMessage(prev => prev ? { ...prev, content: fullResponse } : null);
+        try {
+          const staticText = await getExamHelpStatic(
+            finalPrompt || "Analyze the attached files.",
+            history,
+            currentSubject,
+            currentFiles.map(f => ({ mimeType: f.type, data: f.data }))
+          );
+          if (staticText) {
+            fullResponse = staticText;
+            setStreamingMessage(prev => prev ? { ...prev, content: fullResponse, isTyping: false } : { ...aiMessage, content: fullResponse, isTyping: false });
+          } else {
+            throw new Error("No response from AI");
+          }
+        } catch (staticError) {
+          console.error("GenGenius: Static fallback also failed:", staticError);
+          throw staticError;
         }
       }
       console.log(`GenGenius: Response finished. Total length: ${fullResponse.length}`);
@@ -2012,10 +2012,9 @@ function App() {
         if (error?.message === "MISSING_PERSONAL_KEY" || errorString.includes("MISSING_PERSONAL_KEY")) {
           setHasApiKey(false);
           setIsLoading(false);
-          return;
-        }
-
-        if (
+          
+          errorContent = "⚠️ **Genius Access Required:** I couldn't find a valid AI access key. Please go to **Settings** (gear icon) and generate your **Genius Access Key** or provide your own Gemini API key to start learning.";
+        } else if (
           error?.status === "RESOURCE_EXHAUSTED" || 
           error?.message?.includes("429") || 
           error?.message?.includes("quota") ||
