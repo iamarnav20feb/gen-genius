@@ -239,7 +239,7 @@ interface UserProfile {
   photoURL?: string;
 }
 
-const GeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
+const GenGeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
   <div className={cn("flex items-center gap-3", collapsed && "flex-col gap-2")}>
     <div className="relative">
       <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-lg animate-pulse" />
@@ -257,8 +257,7 @@ const GeniusLogo = ({ collapsed = false }: { collapsed?: boolean }) => (
     </div>
     {!collapsed && (
       <div className="flex flex-col">
-        <span className="text-[10px] font-black tracking-[0.3em] leading-none text-muted-foreground uppercase">Generation</span>
-        <span className="text-2xl font-black tracking-tighter leading-none bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">GENIUS</span>
+        <span className="text-2xl font-black tracking-tighter leading-none bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">GenGenius</span>
       </div>
     )}
   </div>
@@ -586,7 +585,7 @@ const ChatInput = memo(({
                     </Button>
                   </motion.div>
                 } />
-                <TooltipContent>{isAssistantActive ? "Exit Genius Assistant" : "Talk to Genius Assistant"}</TooltipContent>
+                <TooltipContent>{isAssistantActive ? "Exit GenGenius Assistant" : "Talk to GenGenius Assistant"}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
@@ -678,7 +677,7 @@ interface SidebarContentProps {
   isLoggingIn: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   handleLogout: () => void;
-  geniusKeyUsage: { count: number, limit: number } | null;
+  genGeniusKeyUsage: { count: number, limit: number } | null;
 }
 
 const SidebarContent = memo(({ 
@@ -700,7 +699,7 @@ const SidebarContent = memo(({
   isLoggingIn,
   setIsSettingsOpen,
   handleLogout,
-  geniusKeyUsage
+  genGeniusKeyUsage
 }: SidebarContentProps) => {
   const isCollapsed = !isMobile && isSidebarCollapsed;
 
@@ -720,7 +719,7 @@ const SidebarContent = memo(({
                   className="flex items-center justify-between w-full overflow-hidden"
                 >
                   <div className="flex flex-col">
-                    <GeniusLogo />
+                    <GenGeniusLogo />
                     {user && (
                       <div className="flex items-center mt-1 space-x-1.5">
                         {isSyncing ? (
@@ -759,7 +758,7 @@ const SidebarContent = memo(({
                         className="cursor-pointer"
                         onClick={() => setIsSidebarCollapsed(false)}
                       >
-                        <GeniusLogo collapsed />
+                        <GenGeniusLogo collapsed />
                       </div>
                       <Button
                         variant="ghost"
@@ -937,9 +936,9 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
       return (
         <div className="flex flex-col items-center justify-center h-screen space-y-4 p-4 text-center bg-background text-foreground">
           <BrainCircuit className="w-16 h-16 text-primary animate-pulse" />
-          <h1 className="text-2xl font-bold italic tracking-tighter">GENIUS ENGINE STALLED</h1>
+          <h1 className="text-2xl font-bold italic tracking-tighter">GENGENIUS ENGINE STALLED</h1>
           <p className="text-muted-foreground max-w-md font-medium">The GenGenius reasoning core encountered an unexpected state. Please refresh to restart the elite tutor.</p>
-          <Button onClick={() => window.location.reload()} variant="default" className="rounded-full px-8">Restart Genius</Button>
+          <Button onClick={() => window.location.reload()} variant="default" className="rounded-full px-8">Restart GenGenius</Button>
         </div>
       );
     }
@@ -968,14 +967,12 @@ const ActivationOverlay = ({
           <Bot className="w-48 h-48" />
         </div>
         <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-6 relative z-10">
-          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-2 shadow-inner">
-            <Sparkles className="w-10 h-10 text-primary animate-pulse" />
-          </div>
+          <GenGeniusLogo />
           <h2 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Login Required
           </h2>
           <p className="text-muted-foreground font-medium text-[15px] leading-relaxed">
-            Welcome to Generation GENIUS! To start learning and using the AI tutor, please login with your Google Account.
+            Welcome to GenGenius! To start learning and using the AI tutor, please login with your Google Account.
           </p>
           
           <Button 
@@ -996,7 +993,7 @@ const ActivationOverlay = ({
 };
 
 function App() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(() => auth.currentUser);
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem("gen_genius_profile");
     return saved ? JSON.parse(saved) : { name: "", email: "", bio: "", photoURL: "" };
@@ -1062,7 +1059,7 @@ function App() {
   const [isAssistantActive, setIsAssistantActive] = useState(false);
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
-  const [geniusKeyUsage, setGeniusKeyUsage] = useState<{ id: string, count: number, limit: number } | null>(null);
+  const [genGeniusKeyUsage, setGenGeniusKeyUsage] = useState<{ id: string, count: number, limit: number } | null>(null);
   
   const [hasApiKey, setHasApiKey] = useState(true);
   const [manualKey, setManualKey] = useState("");
@@ -1094,7 +1091,7 @@ function App() {
           // Continue to verify with Firestore in background
         }
         
-        // 3. Check for internal Genius key in Firestore
+        // 3. Check for internal GenGenius key in Firestore
         const keyDoc = await getDoc(doc(db, "accessKeys", `key_${user.uid}`));
         if (keyDoc.exists()) {
           const data = keyDoc.data();
@@ -1104,7 +1101,7 @@ function App() {
           const twentyFourHours = 24 * 60 * 60 * 1000;
           
           if (now - lastReset > twentyFourHours) {
-            setGeniusKeyUsage({ id: data.keyId, count: 0, limit: 250 });
+            setGenGeniusKeyUsage({ id: data.keyId, count: 0, limit: 250 });
             // Update Firestore with new reset timestamp
              const updatedData = {
               usageCount: 0,
@@ -1115,7 +1112,7 @@ function App() {
             };
             setDoc(doc(db, "accessKeys", `key_${user.uid}`), updatedData, { merge: true }).catch(console.error);
           } else {
-            setGeniusKeyUsage({ id: data.keyId, count: data.usageCount, limit: 250 });
+            setGenGeniusKeyUsage({ id: data.keyId, count: data.usageCount, limit: 250 });
           }
           
           localStorage.setItem("gen_genius_internal_active", "true");
@@ -1170,7 +1167,7 @@ function App() {
     }
   };
 
-  const handleGenerateGeniusKey = async () => {
+  const handleGenerateGenGeniusKey = async () => {
     if (!user) return;
     setIsGeneratingKey(true);
     try {
@@ -1188,11 +1185,11 @@ function App() {
       await setDoc(doc(db, "accessKeys", `key_${user.uid}`), keyData);
       
       localStorage.setItem("gen_genius_internal_active", "true");
-      setGeniusKeyUsage({ id: keyId, count: 0, limit: 250 });
+      setGenGeniusKeyUsage({ id: keyId, count: 0, limit: 250 });
       setHasApiKey(true);
       
     } catch (error) {
-      console.error("Failed to generate Genius Key:", error);
+      console.error("Failed to generate GenGenius Key:", error);
       alert("System error generating key. Please try again.");
     } finally {
       setIsGeneratingKey(false);
@@ -1339,7 +1336,7 @@ function App() {
     // Set language
     utterance.lang = assistantLanguage;
     
-    // Voice selection for "Genius" (Male Indian Voice)
+    // Voice selection for "GenGenius" (Male Indian Voice)
     const voices = window.speechSynthesis.getVoices();
     let selectedVoice = null;
     
@@ -1393,11 +1390,14 @@ function App() {
 
   // Auth Listener and Firestore Sync
   useEffect(() => {
+    const wasLoggedIn = typeof window !== 'undefined' && localStorage.getItem('gen_genius_was_logged_in') === 'true';
+    let authTimeout: any;
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      setIsAuthReady(true);
-      
       if (currentUser) {
+        if (authTimeout) clearTimeout(authTimeout);
+        localStorage.setItem('gen_genius_was_logged_in', 'true');
+        setUser(currentUser);
+        setIsAuthReady(true);
         setLoginError(null);
         // Sync Profile
         const userDocRef = doc(db, "users", currentUser.uid);
@@ -1437,12 +1437,23 @@ function App() {
           handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
         }
       } else {
-        // Do not clear local chats on logout so user doesn't feel like they "lost" everything unexpectedly
-        // Only clear the profile
-        setProfile({ name: "", email: "", bio: "", photoURL: "" });
+        if (authTimeout) clearTimeout(authTimeout);
+        // Wait longer if we think the user should be logged in
+        const delay = wasLoggedIn ? 2500 : 500;
+        authTimeout = setTimeout(() => {
+          if (!auth.currentUser) {
+            localStorage.removeItem('gen_genius_was_logged_in');
+            setUser(null);
+            setIsAuthReady(true);
+            setProfile({ name: "", email: "", bio: "", photoURL: "" });
+          }
+        }, delay);
       }
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (authTimeout) clearTimeout(authTimeout);
+    };
   }, []);
 
   // Real-time Chats Sync
@@ -1787,14 +1798,14 @@ function App() {
     setAttachedFiles([]);
     setIsLoading(true);
 
-    // QUOTA CHECK: If using internal Genius Key, verify limits
+    // QUOTA CHECK: If using internal GenGenius Key, verify limits
     const internalActive = localStorage.getItem("gen_genius_internal_active") === "true";
-    if (internalActive && geniusKeyUsage) {
-      if (geniusKeyUsage.count >= geniusKeyUsage.limit) {
+    if (internalActive && genGeniusKeyUsage) {
+      if (genGeniusKeyUsage.count >= genGeniusKeyUsage.limit) {
         setStreamingMessage({
           id: crypto.randomUUID(),
           role: "model",
-          content: "⚠️ **Daily Quota Reached:** You have used your 250 questions for today. Your Genius Elite access will reset in 24 hours.",
+          content: "⚠️ **Daily Quota Reached:** You have used your 250 questions for today. Your GenGenius access will reset in 24 hours.",
           timestamp: new Date(),
           status: "error",
           isTyping: false
@@ -1982,19 +1993,18 @@ function App() {
         
         setStreamingMessage(null);
 
-        // Increment internal Genius key usage if applicable
-        if (internalActive && user && geniusKeyUsage) {
-          const newCount = geniusKeyUsage.count + 1;
-          const now = Date.now();
+        // Increment internal GenGenius key usage if applicable
+        if (internalActive && user && genGeniusKeyUsage) {
+          const newCount = genGeniusKeyUsage.count + 1;
           
-          setGeniusKeyUsage(prev => prev ? { ...prev, count: newCount } : null);
+          setGenGeniusKeyUsage(prev => prev ? { ...prev, count: newCount } : null);
           setDoc(doc(db, "accessKeys", `key_${user.uid}`), {
             usageCount: newCount,
             // We don't update timestamp here, it only updates when it hits a new 24h window
           }, { merge: true }).catch(console.error);
         }
 
-        // Auto-speak if Genius Assistant is active
+        // Auto-speak if GenGenius Assistant is active
         if (isAssistantActive) {
           speakText(cleanResponse, aiMessageId);
         }
@@ -2013,7 +2023,7 @@ function App() {
           setHasApiKey(false);
           setIsLoading(false);
           
-          errorContent = "⚠️ **Genius Access Required:** I couldn't find a valid AI access key. Please go to **Settings** (gear icon) and generate your **Genius Access Key** or provide your own Gemini API key to start learning.";
+          errorContent = "⚠️ **GenGenius Access Required:** I couldn't find a valid AI access key. Please go to **Settings** (gear icon) and generate your **GenGenius Access Key** or provide your own Gemini API key to start learning.";
         } else if (
           error?.status === "RESOURCE_EXHAUSTED" || 
           error?.message?.includes("429") || 
@@ -2328,6 +2338,32 @@ function App() {
     setChatToDelete(null);
   };
 
+  if (!isAuthReady) {
+    return (
+      <div className={`flex h-screen w-full items-center justify-center bg-background ${theme} selection:bg-black dark:selection:bg-white`}>
+        <div className="flex flex-col items-center space-y-6">
+          <GenGeniusLogo />
+          <div className="flex flex-col items-center space-y-2">
+            <h1 className="text-2xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              GenGenius
+            </h1>
+            <div className="flex space-x-1.5">
+              {[0, 1, 2].map((i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0 }}
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
+                  className="w-1.5 h-1.5 bg-primary/60 rounded-full" 
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex h-screen w-full bg-[#FAFAFA] dark:bg-[#0a0a0a] text-foreground overflow-hidden font-sans selection:bg-black dark:selection:bg-white selection:text-white dark:selection:text-black ${theme}`}>
       {/* Desktop Sidebar */}
@@ -2362,7 +2398,7 @@ function App() {
           isLoggingIn={isLoggingIn}
           setIsSettingsOpen={setIsSettingsOpen}
           handleLogout={handleLogout}
-          geniusKeyUsage={geniusKeyUsage}
+          genGeniusKeyUsage={genGeniusKeyUsage}
         />
       </motion.aside>
 
@@ -2397,7 +2433,7 @@ function App() {
                   isLoggingIn={isLoggingIn}
                   setIsSettingsOpen={setIsSettingsOpen}
                   handleLogout={handleLogout}
-                  geniusKeyUsage={geniusKeyUsage}
+                  genGeniusKeyUsage={genGeniusKeyUsage}
                 />
               </SheetContent>
             </Sheet>
@@ -2416,7 +2452,7 @@ function App() {
                     </span>
                   ) : (
                     <div className="scale-75 origin-left">
-                      <GeniusLogo />
+                      <GenGeniusLogo />
                     </div>
                   )}
                 </motion.div>
@@ -2586,10 +2622,10 @@ function App() {
                 <div className="space-y-6">
                   <div className="space-y-2">
                     <h2 className="text-4xl font-black tracking-tighter bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
-                      GENIUS ASSISTANT
+                      GENGENIUS ASSISTANT
                     </h2>
                     <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted-foreground">
-                      {isListening ? "Listening to you..." : isSpeaking ? "Genius is speaking" : "Ready to help"}
+                      {isListening ? "Listening to you..." : isSpeaking ? "GenGenius is speaking" : "Ready to help"}
                     </p>
                   </div>
 
@@ -2678,7 +2714,7 @@ function App() {
                               <StopCircle className="w-10 h-10 mr-4" /> STOP
                             </motion.div>
                           ) : isSpeaking ? (
-                            <><VolumeX className="w-10 h-10 mr-4" /> STOP GENIUS</>
+                            <><VolumeX className="w-10 h-10 mr-4" /> STOP GENGENIUS</>
                           ) : (
                             <><Mic className="w-10 h-10 mr-4 group-hover:scale-125 transition-transform" /> START TALKING</>
                           )}
@@ -2810,7 +2846,7 @@ function App() {
                           ))}
                         </div>
                         <span className="text-[10px] font-bold uppercase tracking-widest text-primary/60 ml-2">
-                          Genius is thinking...
+                          GenGenius is thinking...
                         </span>
                       </div>
                     </div>
@@ -2877,8 +2913,8 @@ function App() {
           handleLogout={handleLogout}
           handleGoogleLogin={handleGoogleLogin}
           loginError={loginError}
-          geniusKeyUsage={geniusKeyUsage}
-          onGenerateGeniusKey={handleGenerateGeniusKey}
+          genGeniusKeyUsage={genGeniusKeyUsage}
+          onGenerateGenGeniusKey={handleGenerateGenGeniusKey}
           isGeneratingKey={isGeneratingKey}
           onActivateQuota={handleActivateQuota}
           manualKey={manualKey}
@@ -2917,7 +2953,7 @@ function App() {
         />
       </Suspense>
 
-      {!user && (
+      {isAuthReady && !user && (
         <ActivationOverlay 
           onLogin={handleGoogleLogin} 
         />

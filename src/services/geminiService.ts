@@ -11,7 +11,7 @@ const getAIClient = () => {
     apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
   }
   
-  // 3. INTERNAL GENIUS SYSTEM: Fallback to owner key with internal quota
+  // 3. INTERNAL GENGENIUS SYSTEM: Fallback to owner key with internal quota
   if (!apiKey || apiKey === "undefined") {
     const internalActive = localStorage.getItem("gen_genius_internal_active");
     if (internalActive === "true") {
@@ -48,17 +48,17 @@ STRICT SUBJECT ISOLATION RULE:
 ---
 ` : "";
 
-  const standardInstruction = `SYSTEM ROLE: GENIUS AI – FAST AND ACCURATE MODE
+  const standardInstruction = `SYSTEM ROLE: GENGENIUS AI – FAST AND ACCURATE MODE
 TODAY'S DATE: ${today}
-You are Genius, an advanced AI assistant created by Arnav.
+You are GenGenius, an advanced AI assistant created by Arnav.
 ${subjectRule}
 ---
 Provide the fastest possible accurate response with clean explanation.
 End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
 
-  const voiceInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY
+  const voiceInstruction = `SYSTEM ROLE: GENGENIUS AI PERSONALITY
 TODAY'S DATE: ${today}
-You are Genius, an advanced AI voice mentor created by Arnav.
+You are GenGenius, an advanced AI voice mentor created by Arnav.
 ${subjectRule}
 ---
 Keep responses short, natural, and helpful.
@@ -114,7 +114,7 @@ export async function getExamHelpStatic(
   
   const subjectRule = subject ? `--- CURRENT SUBJECT: ${subject} ---` : "";
 
-  const systemInstruction = `You are Genius AI. Subject: ${subjectRule}. Today is ${today}.`;
+  const systemInstruction = `You are GenGenius AI. Subject: ${subjectRule}. Today is ${today}.`;
 
   const contents = [...history];
   const currentMessageParts: any[] = [{ text: prompt }];

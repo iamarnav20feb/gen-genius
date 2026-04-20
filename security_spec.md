@@ -1,4 +1,4 @@
-# Firestore Security Specification - Generation Genius
+# Firestore Security Specification - GenGenius
 
 ## 1. Data Invariants
 - **AccessKeys:** A user can only have one access key document (keyed by their UID). 

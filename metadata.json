@@ -1,5 +1,5 @@
 {
-  "name": "GenGenius Elite",
+  "name": "GenGenius",
   "description": "The ultimate AI assistant for competitive exam preparation. Features elite subject-specific reasoning, voice interaction, and real-time document analysis.",
   "requestFramePermissions": ["microphone"]
 }

@@ -35,8 +35,8 @@ interface SettingsDialogProps {
   handleLogout: () => void;
   handleGoogleLogin: () => void;
   loginError: string | null;
-  geniusKeyUsage: { id: string, count: number, limit: number } | null;
-  onGenerateGeniusKey: () => void;
+  genGeniusKeyUsage: { id: string, count: number, limit: number } | null;
+  onGenerateGenGeniusKey: () => void;
   isGeneratingKey: boolean;
   onActivateQuota: () => void;
   manualKey: string;
@@ -56,8 +56,8 @@ export default function SettingsDialog({
   handleLogout,
   handleGoogleLogin,
   loginError,
-  geniusKeyUsage,
-  onGenerateGeniusKey,
+  genGeniusKeyUsage,
+  onGenerateGenGeniusKey,
   isGeneratingKey,
   onActivateQuota,
   manualKey,
@@ -91,37 +91,37 @@ export default function SettingsDialog({
               {user && (
                 <div className="grid gap-3 p-4 bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl border-2 border-primary/20">
                   <div className="flex items-center justify-between">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Genius Elite Access</Label>
-                    {geniusKeyUsage ? (
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary">GenGenius Access</Label>
+                    {genGeniusKeyUsage ? (
                       <span className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold uppercase text-[9px]">Active</span>
                     ) : (
                       <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase text-[9px]">Inactive</span>
                     )}
                   </div>
 
-                  {geniusKeyUsage ? (
+                  {genGeniusKeyUsage ? (
                     <div className="space-y-3">
                       <div className="space-y-1">
                         <Label className="text-[9px] font-bold uppercase text-muted-foreground">Internal Access Key</Label>
                         <code className="block w-full bg-background p-2 rounded-lg text-xs font-mono font-bold tracking-wider text-foreground border border-border">
-                          {geniusKeyUsage.id}
+                          {genGeniusKeyUsage.id}
                         </code>
                       </div>
                       
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-[10px] font-bold">
                           <span className="uppercase text-muted-foreground tracking-tight">Daily Usage Quota</span>
-                          <span className={geniusKeyUsage.count >= geniusKeyUsage.limit ? "text-red-500" : "text-primary"}>
-                            {geniusKeyUsage.count} / {geniusKeyUsage.limit}
+                          <span className={genGeniusKeyUsage.count >= genGeniusKeyUsage.limit ? "text-red-500" : "text-primary"}>
+                            {genGeniusKeyUsage.count} / {genGeniusKeyUsage.limit}
                           </span>
                         </div>
                         <div className="h-2 w-full bg-muted rounded-full overflow-hidden border border-border/50">
                           <motion.div 
                             initial={{ width: 0 }}
-                            animate={{ width: `${Math.min(100, (geniusKeyUsage.count / geniusKeyUsage.limit) * 100)}%` }}
+                            animate={{ width: `${Math.min(100, (genGeniusKeyUsage.count / genGeniusKeyUsage.limit) * 100)}%` }}
                             className={cn(
                               "h-full transition-colors",
-                              geniusKeyUsage.count >= geniusKeyUsage.limit ? "bg-red-500" : "bg-primary"
+                              genGeniusKeyUsage.count >= genGeniusKeyUsage.limit ? "bg-red-500" : "bg-primary"
                             )}
                           />
                         </div>
@@ -134,12 +134,12 @@ export default function SettingsDialog({
                         Generate your internal access key to bypass personal quota requirements and get up to 250 requests daily.
                       </p>
                       <Button 
-                        onClick={onGenerateGeniusKey}
+                        onClick={onGenerateGenGeniusKey}
                         disabled={isGeneratingKey}
                         size="sm"
                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20"
                       >
-                        {isGeneratingKey ? "Generating..." : "Generate Genius Access Key"}
+                        {isGeneratingKey ? "Generating..." : "Generate GenGenius Access Key"}
                       </Button>
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>

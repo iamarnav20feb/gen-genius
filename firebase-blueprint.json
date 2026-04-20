@@ -31,7 +31,7 @@
     },
     "AccessKey": {
       "title": "AccessKey",
-      "description": "GenGenius Elite Internal Access Key",
+      "description": "GenGenius Internal Access Key",
       "type": "object",
       "properties": {
         "keyId": { "type": "string" },
