@@ -16,9 +16,25 @@ const getAIClient = () => {
 // --- Model Strategy ---
 // Priority 1/2: Flash models for speed and frequent usage
 // Priority 3: Pro models for complex accuracy
-const getModelName = (accuracyNeeded: boolean = false): string => {
-  return accuracyNeeded ? "gemini-3.1-pro-preview" : "gemini-3.1-flash-lite-preview";
+// --- Model Strategy ---
+// Using stable production models for maximum reliability.
+// Fallback logic is implemented to handle capacity issues (503 errors).
+const getModelName = (accuracyNeeded: boolean = false, retryCount: number = 0): string => {
+  // On first try, use the best available for the job
+  if (retryCount === 0) {
+    return accuracyNeeded ? "gemini-1.5-pro" : "gemini-1.5-flash";
+  }
+  // On first retry, switch to standard Flash (high capacity)
+  if (retryCount === 1) {
+    return "gemini-1.5-flash";
+  }
+  // On second retry, use Flash-8B if available (lightweight/high throughput fallback)
+  return "gemini-1.5-flash-8b";
 };
+
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export async function getExamHelpStream(
   prompt: string, 
@@ -27,14 +43,13 @@ export async function getExamHelpStream(
   files: { mimeType: string, data: string }[] = [],
   isVoiceMode: boolean = false
 ) {
+  // ... (keep existing code for instructions)
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
   
   const personaContext = profile.name ? `USER NAME: ${profile.name}\n` : "";
   const personalityRule = profile.name ? `Always address the user by their name: ${profile.name}. ` : "";
   const goalsContext = profile.bio ? `PERSONAL GOALS/CONTEXT: ${profile.bio}\n` : "";
-  
-  const modelName = getModelName(/* prioritize flash for speed/free-usage */ false);
   
   const subjectRule = subject ? `\n--- STRICT SUBJECT ISOLATION: ${subject} ---\n` : "";
 
@@ -81,23 +96,42 @@ End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
   
   contents.push({ role: "user", parts: currentMessageParts });
 
-  try {
-    const ai = getAIClient();
-    if (!ai) throw new Error("AI Client unreachable");
+  let retryCount = 0;
+  const maxRetries = 2;
 
-    const response = await ai.models.generateContentStream({
-      model: modelName,
-      contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7
-      },
-    });
+  while (retryCount <= maxRetries) {
+    try {
+      const ai = getAIClient();
+      if (!ai) throw new Error("AI Client unreachable");
 
-    return response;
-  } catch (error: any) {
-    console.error("GenGenius: API Error:", error);
-    throw error;
+      const modelName = getModelName(false, retryCount);
+      console.log(`GenGenius: Attempting stream with ${modelName} (Retry: ${retryCount})`);
+
+      const response = await ai.models.generateContentStream({
+        model: modelName,
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7
+        },
+      });
+
+      return response;
+    } catch (error: any) {
+      const errorString = String(error?.message || error?.statusText || "").toLowerCase();
+      const isTransient = errorString.includes("503") || errorString.includes("unavailable") || errorString.includes("high demand") || errorString.includes("capacity");
+
+      if (isTransient && retryCount < maxRetries) {
+        retryCount++;
+        const waitTime = retryCount * 1500; // Exponential backoff: 1.5s, 3s
+        console.warn(`GenGenius: Model busy, retrying in ${waitTime}ms...`, error);
+        await sleep(waitTime);
+        continue;
+      }
+      
+      console.error("GenGenius: API Error:", error);
+      throw error;
+    }
   }
 }
 
@@ -107,8 +141,6 @@ export async function getExamHelpStatic(
   subject?: string,
   files: { mimeType: string, data: string }[] = []
 ) {
-  const modelName = getModelName(/* static often implies more complexity, use Pro */ true);
-  
   const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
   const personaContext = profile.name ? `User Name: ${profile.name}. ` : "";
   const personalityRule = profile.name ? `Always address user by name: ${profile.name}. ` : "";
@@ -121,22 +153,44 @@ ${personaContext}${personalityRule}${goalsContext}Subject: ${subject || "General
 
   const contents = [...history];
   const currentMessageParts: any[] = [{ text: prompt }];
-  // ... files ...
-  
-  // ... (simplified for brevity here)
-
-  try {
-    const ai = getAIClient();
-    if (!ai) throw new Error("AI Client unreachable");
-
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents,
-      config: { systemInstruction }
+  if (files.length > 0) {
+    files.forEach(file => {
+      currentMessageParts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
     });
-    return response.text;
-  } catch (error: any) {
-    console.error("GenGenius: Static API Error:", error);
-    throw error;
+  }
+  contents.push({ role: "user", parts: currentMessageParts });
+
+  let retryCount = 0;
+  const maxRetries = 2;
+
+  while (retryCount <= maxRetries) {
+    try {
+      const ai = getAIClient();
+      if (!ai) throw new Error("AI Client unreachable");
+
+      const modelName = getModelName(true, retryCount);
+      console.log(`GenGenius: Attempting static with ${modelName} (Retry: ${retryCount})`);
+
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents,
+        config: { systemInstruction }
+      });
+      return response.text;
+    } catch (error: any) {
+      const errorString = String(error?.message || error?.statusText || "").toLowerCase();
+      const isTransient = errorString.includes("503") || errorString.includes("unavailable") || errorString.includes("high demand") || errorString.includes("capacity");
+
+      if (isTransient && retryCount < maxRetries) {
+        retryCount++;
+        const waitTime = retryCount * 1500;
+        console.warn(`GenGenius: Model busy, retrying in ${waitTime}ms...`, error);
+        await sleep(waitTime);
+        continue;
+      }
+
+      console.error("GenGenius: Static API Error:", error);
+      throw error;
+    }
   }
 }
