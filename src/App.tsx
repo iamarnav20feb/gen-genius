@@ -954,10 +954,22 @@ declare global {
 }
 
 const ActivationOverlay = ({ 
-  onLogin
+  onLogin,
+  user,
+  hasApiKey,
+  manualKey,
+  setManualKey,
+  onSaveManualKey
 }: { 
   onLogin: () => void;
+  user: FirebaseUser | null;
+  hasApiKey: boolean;
+  manualKey: string;
+  setManualKey: (key: string) => void;
+  onSaveManualKey: () => void;
 }) => {
+  if (user && hasApiKey) return null;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 overflow-y-auto">
       <Card className="w-full max-w-lg shadow-2xl border-2 border-primary/20 bg-background overflow-hidden relative my-8">
@@ -966,24 +978,75 @@ const ActivationOverlay = ({
         </div>
         <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-6 relative z-10">
           <GenGeniusLogo />
-          <h2 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Login Required
-          </h2>
-          <p className="text-muted-foreground font-medium text-[15px] leading-relaxed">
-            Welcome to GenGenius! To start learning and using the AI tutor, please login with your Google Account.
-          </p>
           
-          <Button 
-            size="lg" 
-            className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-blue-600 hover:bg-blue-700 text-white"
-            onClick={onLogin}
-          >
-            Login with Google
-          </Button>
+          {!user ? (
+            <>
+              <h2 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                Login Required
+              </h2>
+              <p className="text-muted-foreground font-medium text-[15px] leading-relaxed">
+                Welcome to GenGenius! To start learning and using the AI tutor, please login with your Google Account.
+              </p>
+              
+              <Button 
+                size="lg" 
+                className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg mt-4 hover:scale-[1.02] transition-transform uppercase bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={onLogin}
+              >
+                Login with Google
+              </Button>
 
-          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-4">
-            Secured by Firebase Authentication
-          </p>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-4">
+                Secured by Firebase Authentication
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                API Key Required
+              </h2>
+              <p className="text-muted-foreground font-medium text-[15px] leading-relaxed">
+                To guarantee lightning-fast responses and absolute privacy, GenGenius requires a personal Google Gemini API Key. No shared keys, no rate limits!
+              </p>
+              
+              <div className="w-full space-y-4 text-left p-5 bg-muted/50 rounded-2xl border border-border">
+                <ol className="list-decimal pl-4 space-y-2 text-sm text-foreground/80 font-medium">
+                  <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-primary underline font-bold">Google AI Studio</a></li>
+                  <li>Sign in and click <b>"Create API key"</b></li>
+                  <li>Copy the selected key and paste it below.</li>
+                </ol>
+              </div>
+
+              <div className="w-full space-y-3">
+                <Label htmlFor="overlay-api-key" className="text-xs font-bold uppercase tracking-widest text-muted-foreground w-full text-left block">
+                  Your Personal Gemini API Key
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="overlay-api-key"
+                    type="password"
+                    value={manualKey}
+                    onChange={(e) => setManualKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="bg-background border-2 border-border rounded-xl text-sm h-12 font-bold"
+                  />
+                </div>
+              </div>
+
+              <Button 
+                size="lg" 
+                className="w-full h-14 rounded-xl text-[16px] font-black tracking-wide shadow-lg hover:scale-[1.02] transition-transform uppercase text-white"
+                onClick={onSaveManualKey}
+                disabled={!manualKey.trim()}
+              >
+                Save Securely & Start App
+              </Button>
+              
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-2">
+                Your key is stored securely in your browser's local storage and is never sent to any server except directly to Google for inference.
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -2839,9 +2902,14 @@ function App() {
         />
       </Suspense>
 
-      {isAuthReady && !user && (
+      {isAuthReady && (!user || !hasApiKey) && (
         <ActivationOverlay 
           onLogin={handleGoogleLogin} 
+          user={user}
+          hasApiKey={hasApiKey}
+          manualKey={manualKey}
+          setManualKey={setManualKey}
+          onSaveManualKey={handleSaveManualKey}
         />
       )}
     </div>
