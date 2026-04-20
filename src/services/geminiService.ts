@@ -3,20 +3,11 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 const getAIClient = () => {
   if (typeof window === "undefined") return null;
 
-  // 1. Priority: User's personal API key from local storage
-  let apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
-  
-  // 2. Fallback: Check if INTERNAL GENGENIUS SYSTEM is explicitly activated by this user
-  if (!apiKey || apiKey === "undefined") {
-    const internalActive = localStorage.getItem("gen_genius_internal_active");
-    if (internalActive === "true") {
-      // Use the global environment keys ONLY IF internal access is unlocked
-      apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-    }
-  }
+  // The ONLY way to access the AI is through a personal GenGenius API key saved to localStorage.
+  const apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
     
   if (!apiKey || apiKey === "undefined") {
-    console.error("GenGenius: No API key found.");
+    console.error("GenGenius: No personal API key found.");
     throw new Error("MISSING_PERSONAL_KEY");
   }
 
@@ -32,8 +23,8 @@ export async function getExamHelpStream(
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   
-  // Use gemini-3-flash-preview for maximum stability and speed
-  const modelName = "gemini-3-flash-preview";
+  // Use gemini-flash-latest for maximum stability, higher quota, and speed
+  const modelName = "gemini-flash-latest";
   
   const subjectRule = subject ? `
 ---
@@ -105,7 +96,7 @@ export async function getExamHelpStatic(
   files: { mimeType: string, data: string }[] = []
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const modelName = "gemini-3-flash-preview";
+  const modelName = "gemini-flash-latest";
   
   const subjectRule = subject ? `--- CURRENT SUBJECT: ${subject} ---` : "";
 

@@ -677,7 +677,6 @@ interface SidebarContentProps {
   isLoggingIn: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   handleLogout: () => void;
-  genGeniusKeyUsage: { count: number, limit: number } | null;
 }
 
 const SidebarContent = memo(({ 
@@ -698,8 +697,7 @@ const SidebarContent = memo(({
   loginError,
   isLoggingIn,
   setIsSettingsOpen,
-  handleLogout,
-  genGeniusKeyUsage
+  handleLogout
 }: SidebarContentProps) => {
   const isCollapsed = !isMobile && isSidebarCollapsed;
 
@@ -1058,14 +1056,12 @@ function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAssistantActive, setIsAssistantActive] = useState(false);
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
-  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
-  const [genGeniusKeyUsage, setGenGeniusKeyUsage] = useState<{ id: string, count: number, limit: number } | null>(null);
   
   const [hasApiKey, setHasApiKey] = useState(true);
   const [manualKey, setManualKey] = useState("");
 
   useEffect(() => {
-    const checkApiKey = async () => {
+    const checkApiKey = () => {
       try {
         if (!user) {
           // If no user, hasApiKey doesn't matter yet as ActivationOverlay shows Login Required
@@ -1074,127 +1070,22 @@ function App() {
           return;
         }
 
-        // 1. Check AI Studio Environment Key
-        let aistudioHasKey = false;
-        if (window.aistudio && window.aistudio.hasSelectedApiKey) {
-          aistudioHasKey = await window.aistudio.hasSelectedApiKey();
-          if (aistudioHasKey) {
-            setHasApiKey(true);
-            return;
-          }
-        }
-
-        // 2. Check local flag (fast path)
-        const internalActive = localStorage.getItem("gen_genius_internal_active");
-        if (internalActive === "true") {
-          setHasApiKey(true);
-          // Continue to verify with Firestore in background
-        }
-        
-        // 3. Check for internal GenGenius key in Firestore
-        const keyDoc = await getDoc(doc(db, "accessKeys", `key_${user.uid}`));
-        if (keyDoc.exists()) {
-          const data = keyDoc.data();
-          const now = Date.now();
-          // Support legacy lastResetDate for migration
-          const lastReset = data.lastResetTimestamp || (data.lastResetDate ? new Date(data.lastResetDate).getTime() : 0);
-          const twentyFourHours = 24 * 60 * 60 * 1000;
-          
-          if (now - lastReset > twentyFourHours) {
-            setGenGeniusKeyUsage({ id: data.keyId, count: 0, limit: 250 });
-            // Update Firestore with new reset timestamp
-             const updatedData = {
-              usageCount: 0,
-              lastResetTimestamp: now,
-              // Ensure structural fields are present for rules validation
-              keyId: data.keyId,
-              userId: user.uid
-            };
-            setDoc(doc(db, "accessKeys", `key_${user.uid}`), updatedData, { merge: true }).catch(console.error);
-          } else {
-            setGenGeniusKeyUsage({ id: data.keyId, count: data.usageCount, limit: 250 });
-          }
-          
-          localStorage.setItem("gen_genius_internal_active", "true");
-          setHasApiKey(true);
-          return;
-        }
-
-        // 4. Fallback to manual key
+        // Strictly check for manual personal key ONLY.
+        // We completely disable any fallback to aistudio or process.env global keys.
         const savedKey = localStorage.getItem("gen_genius_user_api_key");
-        if (savedKey) {
+        if (savedKey && savedKey !== "undefined" && savedKey.trim() !== "") {
           setHasApiKey(true);
-          return;
+        } else {
+          setHasApiKey(false);
         }
-
-        // 5. Final fallback (e.g. injected server key)
-        const envKey = !!(typeof process !== "undefined" && process?.env?.API_KEY);
-        setHasApiKey(envKey || aistudioHasKey);
-        
       } catch(e) {
-        console.error("Error checking AI Studio API key:", e);
+        console.error("Error checking API key:", e);
       }
     };
     if (isAuthReady) {
       checkApiKey();
     }
   }, [user, isAuthReady]);
-
-  const handleActivateQuota = async () => {
-    if (window.aistudio && window.aistudio.openSelectKey) {
-      try {
-        await window.aistudio.openSelectKey();
-        
-        // Wait a small moment for the AI Studio key to inject, 
-        // then double-check if a key was actually selected.
-        // We will not blindly set it to true. We force verification.
-        setTimeout(async () => {
-          if (window.aistudio && window.aistudio.hasSelectedApiKey) {
-            const reallyHasKey = await window.aistudio.hasSelectedApiKey();
-            setHasApiKey(reallyHasKey);
-          } else {
-             // Fallback to true due to the mandatory instruction guidelines if hasSelectedApiKey isn't available
-             setHasApiKey(true);
-          }
-        }, 1000);
-
-      } catch (e: any) {
-        console.error("Error activating personal quota:", e);
-        if (e && typeof e.message === "string" && e.message.includes("Requested entity was not found.")) {
-          setHasApiKey(false);
-        }
-      }
-    }
-  };
-
-  const handleGenerateGenGeniusKey = async () => {
-    if (!user) return;
-    setIsGeneratingKey(true);
-    try {
-      const keyId = `GENIUS-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      const now = Date.now();
-      
-      const keyData = {
-        keyId,
-        userId: user.uid,
-        usageCount: 0,
-        lastResetTimestamp: now,
-        createdAt: new Date().toISOString()
-      };
-      
-      await setDoc(doc(db, "accessKeys", `key_${user.uid}`), keyData);
-      
-      localStorage.setItem("gen_genius_internal_active", "true");
-      setGenGeniusKeyUsage({ id: keyId, count: 0, limit: 250 });
-      setHasApiKey(true);
-      
-    } catch (error) {
-      console.error("Failed to generate GenGenius Key:", error);
-      alert("System error generating key. Please try again.");
-    } finally {
-      setIsGeneratingKey(false);
-    }
-  };
 
   const handleSaveManualKey = () => {
     if (manualKey.trim()) {
@@ -1798,23 +1689,6 @@ function App() {
     setAttachedFiles([]);
     setIsLoading(true);
 
-    // QUOTA CHECK: If using internal GenGenius Key, verify limits
-    const internalActive = localStorage.getItem("gen_genius_internal_active") === "true";
-    if (internalActive && genGeniusKeyUsage) {
-      if (genGeniusKeyUsage.count >= genGeniusKeyUsage.limit) {
-        setStreamingMessage({
-          id: crypto.randomUUID(),
-          role: "model",
-          content: "⚠️ **Daily Quota Reached:** You have used your 250 questions for today. Your GenGenius access will reset in 24 hours.",
-          timestamp: new Date(),
-          status: "error",
-          isTyping: false
-        });
-        setIsLoading(false);
-        return;
-      }
-    }
-
     const controller = new AbortController();
     setAbortController(controller);
 
@@ -2010,17 +1884,6 @@ function App() {
         
         setStreamingMessage(null);
 
-        // Increment internal GenGenius key usage if applicable
-        if (internalActive && user && genGeniusKeyUsage) {
-          const newCount = genGeniusKeyUsage.count + 1;
-          
-          setGenGeniusKeyUsage(prev => prev ? { ...prev, count: newCount } : null);
-          setDoc(doc(db, "accessKeys", `key_${user.uid}`), {
-            usageCount: newCount,
-            // We don't update timestamp here, it only updates when it hits a new 24h window
-          }, { merge: true }).catch(console.error);
-        }
-
         // Auto-speak if GenGenius Assistant is active
         if (isAssistantActive) {
           speakText(cleanResponse, aiMessageId);
@@ -2040,7 +1903,7 @@ function App() {
         if (errorString.includes("MISSING_PERSONAL_KEY")) {
           setHasApiKey(false);
           setIsLoading(false);
-          errorContent = "⚠️ **GenGenius Access Required:** I couldn't find a valid AI access key. Please go to **Settings** (gear icon) and generate your **GenGenius Access Key** or provide your own Gemini API key to start learning.";
+          errorContent = "⚠️ **API Key Required:** I couldn't find a valid AI access key. Please go to **Settings** (gear icon) and securely insert your personal Gemini API key to start learning.";
         } else if (
           errorString.includes("429") || 
           errorString.includes("quota") ||
@@ -2048,14 +1911,9 @@ function App() {
           error?.status === "RESOURCE_EXHAUSTED" ||
           error?.status === 429
         ) {
-          const isInternal = localStorage.getItem("gen_genius_internal_active") === "true";
-          if (isInternal) {
-            errorContent = "⚠️ **Global Server Traffic High:** While you still have GenGenius Daily Quota remaining, the underlying Google AI server is currently experiencing heavy global traffic. Please wait a minute and try again, or add your own Personal API Key in Settings to skip the line.";
-          } else {
-            errorContent = "⚠️ **Personal API Quota Exceeded:** You have reached the limits on your personal Google Gemini API key. Please check your billing and plan details at Google AI Studio.";
-          }
+          errorContent = "⚠️ **Personal API Quota Exceeded:** You have reached the usage limits on your personal Google Gemini API key. Please check your billing and plan details at Google AI Studio.";
         } else if (errorString.includes("403") || errorString.includes("PERMISSION_DENIED") || errorString.includes("API key")) {
-          errorContent = "⚠️ **API Key / Permission Error:** My connection to the AI is blocked. This might be due to an invalid API key or restricted access. Please verify your API key in Settings.";
+          errorContent = "⚠️ **API Key / Permission Error:** My connection to the AI is blocked. This might be due to an invalid API key or restricted access. Please verify your personal API key in Settings.";
         } else if (errorString.includes("fetch") || errorString.includes("Network") || errorString.includes("Failed to fetch") || errorString.includes("ERR_NETWORK")) {
           errorContent = "⚠️ **Network Blocked:** I can't reach Google's AI servers. Since you are on a Chromebook, your school or network might be blocking 'generativelanguage.googleapis.com'. Try using a personal hotspot or another network.";
         } else if (errorString.includes("400") || errorString.includes("INVALID_ARGUMENT")) {
@@ -2432,7 +2290,6 @@ function App() {
           isLoggingIn={isLoggingIn}
           setIsSettingsOpen={setIsSettingsOpen}
           handleLogout={handleLogout}
-          genGeniusKeyUsage={genGeniusKeyUsage}
         />
       </motion.aside>
 
@@ -2467,7 +2324,6 @@ function App() {
                   isLoggingIn={isLoggingIn}
                   setIsSettingsOpen={setIsSettingsOpen}
                   handleLogout={handleLogout}
-                  genGeniusKeyUsage={genGeniusKeyUsage}
                 />
               </SheetContent>
             </Sheet>
@@ -2947,10 +2803,6 @@ function App() {
           handleLogout={handleLogout}
           handleGoogleLogin={handleGoogleLogin}
           loginError={loginError}
-          genGeniusKeyUsage={genGeniusKeyUsage}
-          onGenerateGenGeniusKey={handleGenerateGenGeniusKey}
-          isGeneratingKey={isGeneratingKey}
-          onActivateQuota={handleActivateQuota}
           manualKey={manualKey}
           setManualKey={setManualKey}
           onSaveManualKey={handleSaveManualKey}
