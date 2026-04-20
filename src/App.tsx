@@ -448,23 +448,6 @@ const SidebarItem = memo(({
             )}>{chat.title}</span>
           )}
         </div>
-        
-        {!isCollapsed && (
-          <div className="flex items-center pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 rounded-md hover:bg-background/20"
-              onClick={(e) => {
-                e.stopPropagation();
-                setChatToDelete(chat.id);
-                setIsDeleteDialogOpen(true);
-              }}
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
-          </div>
-        )}
       </motion.div>
     } />
     {isCollapsed && <TooltipContent side="right">{chat.title}</TooltipContent>}
@@ -2510,16 +2493,6 @@ function App() {
                       Reset / Restart Chat
                     </DropdownMenuItem>
 
-                    <DropdownMenuItem 
-                      className="flex items-center px-2 py-2 rounded-lg text-xs font-bold text-red-600 cursor-pointer focus:bg-red-50 dark:focus:bg-red-900/20"
-                      onClick={() => {
-                        setChatToDelete(activeChat.id);
-                        setIsDeleteDialogOpen(true);
-                      }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 mr-2" />
-                      Delete Chat
-                    </DropdownMenuItem>
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
