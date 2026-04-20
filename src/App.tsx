@@ -2341,10 +2341,20 @@ function App() {
     return (
       <div className={`flex h-screen w-full items-center justify-center bg-background ${theme} selection:bg-black dark:selection:bg-white`}>
         <div className="flex flex-col items-center space-y-6">
-          <GenGeniusLogo />
-          <div className="flex flex-col items-center space-y-2">
-            <h1 className="text-2xl font-black tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              GenGenius
+          <div className="relative">
+            <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-xl animate-pulse" />
+            <div className="relative w-20 h-20 bg-gradient-to-br from-primary via-accent to-secondary rounded-2xl flex items-center justify-center shadow-2xl border-2 border-white/10 overflow-hidden">
+              <Bot className="w-10 h-10 text-white" />
+              <motion.div 
+                animate={{ opacity: [0.3, 0.6, 0.3] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="absolute top-2 right-2 w-3 h-3 bg-secondary rounded-full"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col items-center space-y-4">
+            <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
+              Welcome to GenGenius AI
             </h1>
             <div className="flex space-x-1.5">
               {[0, 1, 2].map((i) => (
