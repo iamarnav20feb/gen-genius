@@ -469,7 +469,7 @@ const SidebarItem = memo(({
         )}
       </motion.div>
     )} />
-    {isCollapsed && <TooltipContent side="right">{chat.title}</TooltipContent>}
+    {isCollapsed && <TooltipContent side="right" sideOffset={12}>{chat.title}</TooltipContent>}
   </Tooltip>
 ));
 
@@ -555,54 +555,50 @@ const ChatInput = memo(({
               accept="image/*,.pdf,.txt"
               onChange={handleFileChange}
             />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger render={(props: any) => (
-                  <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-12 w-12 rounded-xl hover:bg-muted text-foreground"
-                      onClick={(e) => {
-                        props.onClick?.(e);
-                        document.getElementById('file-upload')?.click();
-                      }}
-                    >
-                      <Paperclip className="w-6 h-6" />
-                    </Button>
-                  </motion.div>
-                )} />
-                <TooltipContent>Attach Files</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger render={(props: any) => (
+                <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-12 w-12 rounded-xl hover:bg-muted text-foreground"
+                    onClick={(e) => {
+                      props.onClick?.(e);
+                      document.getElementById('file-upload')?.click();
+                    }}
+                  >
+                    <Paperclip className="w-6 h-6" />
+                  </Button>
+                </motion.div>
+              )} />
+              <TooltipContent>Attach Files</TooltipContent>
+            </Tooltip>
 
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger render={(props: any) => (
-                  <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "h-12 w-12 rounded-xl hover:bg-muted transition-all",
-                        isAssistantActive ? "text-primary bg-primary/10" : "text-foreground"
-                      )}
-                      onClick={(e) => {
-                        props.onClick?.(e);
-                        if (isAssistantActive && isListening) {
-                          recognitionRef.current?.stop();
-                          setIsListening(false);
-                        }
-                        setIsAssistantActive(!isAssistantActive);
-                      }}
-                    >
-                      <Sparkles className={cn("w-6 h-6", isAssistantActive && "animate-pulse")} />
-                    </Button>
-                  </motion.div>
-                )} />
-                <TooltipContent>{isAssistantActive ? "Exit GenGenius Assistant" : "Talk to GenGenius Assistant"}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger render={(props: any) => (
+                <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-12 w-12 rounded-xl hover:bg-muted transition-all",
+                      isAssistantActive ? "text-primary bg-primary/10" : "text-foreground"
+                    )}
+                    onClick={(e) => {
+                      props.onClick?.(e);
+                      if (isAssistantActive && isListening) {
+                        recognitionRef.current?.stop();
+                        setIsListening(false);
+                      }
+                      setIsAssistantActive(!isAssistantActive);
+                    }}
+                  >
+                    <Sparkles className={cn("w-6 h-6", isAssistantActive && "animate-pulse")} />
+                  </Button>
+                </motion.div>
+              )} />
+              <TooltipContent>{isAssistantActive ? "Exit GenGenius Assistant" : "Talk to GenGenius Assistant"}</TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="relative flex-1">
@@ -615,29 +611,27 @@ const ChatInput = memo(({
             />
             
             <div className="absolute right-2 top-2 flex items-center gap-1">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger render={(props: any) => (
-                    <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          "h-12 w-12 rounded-xl hover:bg-muted transition-all",
-                          isListening ? "text-red-500 bg-red-50 dark:bg-red-900/20" : "text-foreground"
-                        )}
-                        onClick={(e) => {
-                          props.onClick?.(e);
-                          toggleListening();
-                        }}
-                      >
-                        {isListening ? <StopCircle className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
-                      </Button>
-                    </motion.div>
-                  )} />
-                  <TooltipContent>{isListening ? "Stop Listening" : "Voice Input"}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger render={(props: any) => (
+                  <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-12 w-12 rounded-xl hover:bg-muted transition-all",
+                        isListening ? "text-red-500 bg-red-50 dark:bg-red-900/20" : "text-foreground"
+                      )}
+                      onClick={(e) => {
+                        props.onClick?.(e);
+                        toggleListening();
+                      }}
+                    >
+                      {isListening ? <StopCircle className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
+                    </Button>
+                  </motion.div>
+                )} />
+                <TooltipContent>{isListening ? "Stop Listening" : "Voice Input"}</TooltipContent>
+              </Tooltip>
 
               {isLoading ? (
                 <Button 
@@ -720,8 +714,7 @@ const SidebarContent = memo(({
   const isCollapsed = !isMobile && isSidebarCollapsed;
 
   return (
-    <TooltipProvider delay={0}>
-      <div className="flex flex-col h-full bg-white dark:bg-[#0a0a0a] border-r dark:border-white/5 transition-all duration-300 ease-in-out">
+    <div className="flex flex-col h-full bg-white dark:bg-[#0a0a0a] border-r dark:border-white/5 transition-all duration-300 ease-in-out">
         {/* Sidebar Header */}
         <div className={cn("p-6", isCollapsed && "p-4 flex flex-col items-center")}>
           <div className="flex items-center justify-between w-full">
@@ -863,7 +856,7 @@ const SidebarContent = memo(({
                     </Button>
                   </motion.div>
                 )} />
-                {isCollapsed && <TooltipContent side="right">{sub.name}</TooltipContent>}
+                {isCollapsed && <TooltipContent side="right" sideOffset={12}>{sub.name}</TooltipContent>}
               </Tooltip>
             ))}
           </div>
@@ -938,7 +931,6 @@ const SidebarContent = memo(({
           </Button>
         </div>
       </div>
-    </TooltipProvider>
   );
 });
 
@@ -2615,7 +2607,10 @@ function App() {
 
         {/* Chat Area */}
         <div 
-          className="flex-1 overflow-y-auto px-4 md:px-8 py-6 scroll-smooth custom-scrollbar relative" 
+          className={cn(
+            "flex-1 px-4 md:px-8 py-6 scroll-smooth custom-scrollbar relative overflow-y-auto",
+            isAssistantActive && "py-0 px-0 overflow-hidden"
+          )} 
           ref={scrollRef}
         >
           <AnimatePresence>
@@ -2625,7 +2620,7 @@ function App() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="relative h-full w-full flex flex-col items-center bg-[#fdfdfd] dark:bg-[#0a0a0f] overflow-y-auto overflow-x-hidden p-4 sm:p-8 custom-scrollbar"
+                className="relative h-full w-full flex flex-col items-center bg-[#fdfdfd] dark:bg-[#0a0a0f] overflow-hidden p-4 custom-scrollbar"
               >
                 {/* Clean, Non-Looped Background */}
                 <div className="absolute inset-0 pointer-events-none opacity-30">
@@ -2633,45 +2628,37 @@ function App() {
                   <div className="absolute inset-0 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_20%,transparent_100%)]" />
                 </div>
 
-                <div className="relative z-10 flex flex-col items-center w-full max-w-3xl space-y-8 py-10">
-                  {/* Subtle Branding */}
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="p-3 rounded-2xl bg-primary/5 border border-primary/10 mb-2">
-                      <Bot className="w-8 h-8 text-primary" />
-                    </div>
-                    <h2 className="text-sm font-bold tracking-[0.3em] text-foreground/40 uppercase">GenGenius Interface</h2>
-                  </div>
-
-                  {/* Dynamic Voice Hub */}
-                  <div className="relative flex items-center justify-center py-6">
+                <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-xl h-full py-4 space-y-4">
+                  {/* Compact Dynamic Voice Hub */}
+                  <div className="relative flex items-center justify-center">
                     <motion.div 
                       animate={{ 
-                        scale: isListening ? [1, 1.05, 1] : 1,
+                        scale: isListening ? [1, 1.02, 1] : 1,
                         opacity: isListening ? 1 : 0.8
                       }}
                       className={cn(
-                        "w-48 h-48 rounded-[3rem] flex items-center justify-center transition-all duration-500 shadow-xl border overflow-hidden",
+                        "w-36 h-36 rounded-[2rem] flex items-center justify-center transition-all duration-500 shadow-lg border overflow-hidden",
                         isListening 
                           ? "bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-900/30" 
                           : "bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"
                       )}
                     >
                       {/* Quiet Waveform when speaking */}
-                      <div className="absolute flex items-end justify-center gap-1.5 h-16 bottom-0 left-0 right-0 px-10 pb-4 opacity-50">
+                      <div className="absolute flex items-end justify-center gap-1.5 h-12 bottom-0 left-0 right-0 px-8 pb-3 opacity-50">
                         {isSpeaking ? (
-                          [...Array(12)].map((_, i) => (
+                          [...Array(10)].map((_, i) => (
                             <motion.div
                               key={i}
-                              animate={{ height: [4, Math.random() * 32 + 4, 4] }}
+                              animate={{ height: [3, Math.random() * 24 + 3, 3] }}
                               transition={{ repeat: Infinity, duration: 0.4, delay: i * 0.05 }}
                               className="w-1 bg-primary rounded-full"
                             />
                           ))
                         ) : isListening ? (
-                          [...Array(12)].map((_, i) => (
+                          [...Array(10)].map((_, i) => (
                             <motion.div
                               key={i}
-                              animate={{ height: [2, Math.random() * 20 + 2, 2] }}
+                              animate={{ height: [2, Math.random() * 15 + 2, 2] }}
                               transition={{ repeat: Infinity, duration: 0.3, delay: i * 0.03 }}
                               className="w-1 bg-red-400 rounded-full"
                             />
@@ -2681,23 +2668,23 @@ function App() {
 
                       <div className="relative flex flex-col items-center">
                         <motion.div
-                          animate={isListening ? { scale: [1, 1.1, 1] } : {}}
+                          animate={isListening ? { scale: [1, 1.05, 1] } : {}}
                           transition={{ repeat: Infinity, duration: 1 }}
                         >
                           {isListening ? (
-                            <Mic className="w-16 h-16 text-red-500" />
+                            <Mic className="w-12 h-12 text-red-500" />
                           ) : isSpeaking ? (
-                            <Volume2 className="w-16 h-16 text-primary animate-pulse" />
+                            <Volume2 className="w-12 h-12 text-primary animate-pulse" />
                           ) : (
-                            <BrainCircuit className="w-16 h-16 text-slate-400" />
+                            <BrainCircuit className="w-12 h-12 text-slate-400" />
                           )}
                         </motion.div>
                       </div>
                     </motion.div>
                   </div>
 
-                  {/* Subtitles: Line-by-Line Match */}
-                  <div className="w-full flex-1 min-h-[160px] flex items-center justify-center text-center px-4">
+                  {/* Subtitles: More Compact */}
+                  <div className="w-full flex-shrink-0 min-h-[80px] max-h-[100px] flex items-center justify-center text-center px-4 overflow-hidden">
                     <AnimatePresence mode="wait">
                       {isSpeaking ? (
                         <motion.div
@@ -2705,9 +2692,9 @@ function App() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
-                          className="max-w-2xl"
+                          className="max-w-md"
                         >
-                          <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-2xl font-bold leading-tight">
+                          <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-lg font-bold leading-tight">
                             {(currentSpokenText || "").split(/\s+/).map((word, i) => (
                               <motion.span
                                 key={`${word}-${i}`}
@@ -2715,7 +2702,7 @@ function App() {
                                 animate={{ 
                                   opacity: i <= spokenWordIndex ? 1 : 0.3,
                                   color: i === spokenWordIndex ? "var(--primary)" : "currentColor",
-                                  scale: i === spokenWordIndex ? 1.05 : 1
+                                  scale: i === spokenWordIndex ? 1.02 : 1
                                 }}
                                 className="transition-all duration-200"
                               >
@@ -2729,29 +2716,23 @@ function App() {
                           key="subtitle-status"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          className="space-y-4"
+                          className="space-y-1"
                         >
-                          <p className="text-2xl font-medium text-foreground/70">
-                            {isListening ? "Listening to your request..." : `Ready to assist you, ${firstName}.`}
+                          <p className="text-base font-medium text-foreground/60 tracking-tight">
+                            {isListening ? "Listening..." : `Ready for you, ${firstName}.`}
                           </p>
-                          <div className="flex items-center justify-center gap-2">
-                            <Sparkles className="w-4 h-4 text-primary animate-pulse" />
-                            <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-foreground/30">
-                              System Operational
-                            </span>
-                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
                   </div>
 
-                  {/* High Visibility Controls - Clear & Bold */}
-                  <div className="w-full flex flex-col items-center gap-8 pt-4">
-                    <div className="flex flex-wrap items-center justify-center gap-4 p-2 rounded-[2rem] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm">
+                  {/* High Visibility Controls - Ultra Compact */}
+                  <div className="w-full flex-shrink-0 flex flex-col items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2 p-1.5 rounded-[2rem] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm">
                       <Button
                         size="lg"
                         className={cn(
-                          "rounded-full px-8 h-14 text-sm font-bold uppercase tracking-widest shadow-lg transition-all active:scale-95",
+                          "rounded-full px-5 h-11 text-[10px] font-bold uppercase tracking-widest shadow-md transition-all active:scale-95",
                           isListening 
                             ? "bg-red-600 hover:bg-red-700 text-white" 
                             : "bg-primary hover:bg-primary/90 text-white"
@@ -2759,16 +2740,16 @@ function App() {
                         onClick={toggleListening}
                       >
                         {isListening ? (
-                          <><Square className="w-4 h-4 mr-2" /> Stop Listening</>
+                          <><Square className="w-3 h-3 mr-2" /> Stop</>
                         ) : (
-                          <><Mic className="w-4 h-4 mr-2" /> Start Talk</>
+                          <><Mic className="w-3 h-3 mr-2" /> Talk</>
                         )}
                       </Button>
 
                       <Button
                         variant="outline"
                         size="icon"
-                        className="rounded-full h-14 w-14 border-2 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                        className="rounded-full h-11 w-11 border hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
                         onClick={() => {
                           window.speechSynthesis.cancel();
                           setIsSpeaking(null);
@@ -2776,16 +2757,14 @@ function App() {
                           setIsListening(false);
                         }}
                       >
-                        <StopCircle className="w-6 h-6" />
+                        <StopCircle className="w-4 h-4" />
                       </Button>
-
-                      <div className="h-8 w-px bg-slate-300 dark:bg-white/10 mx-1" />
 
                       <DropdownMenu>
                         <DropdownMenuTrigger render={(props) => (
-                          <Button {...props} variant="ghost" className="h-14 rounded-full px-5 gap-2 text-foreground/60 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold">
-                            <Languages className="w-4 h-4 text-primary" />
-                            {assistantLanguage === "en-IN" ? "ENGLISH" : "HINDI"}
+                          <Button {...props} variant="ghost" className="h-11 rounded-full px-3 gap-1.5 text-foreground/50 hover:bg-slate-200 dark:hover:bg-white/10 text-[8px] font-bold">
+                            <Languages className="w-3 h-3 text-primary" />
+                            {assistantLanguage === "en-IN" ? "EN" : "HI"}
                           </Button>
                         )} />
                         <DropdownMenuContent align="center" className="bg-popover border-border">
@@ -2793,15 +2772,18 @@ function App() {
                           <DropdownMenuItem onClick={() => setAssistantLanguage("hi-IN")}>Hindi</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
 
-                    <Button
-                      variant="link"
-                      className="text-foreground/40 hover:text-red-500 font-bold uppercase text-[10px] tracking-widest"
-                      onClick={toggleAssistant}
-                    >
-                      <X className="w-4 h-4 mr-2" /> Terminate Assistant
-                    </Button>
+                      <div className="w-px h-5 bg-slate-300 dark:bg-white/10 mx-1" />
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full h-11 w-11 hover:bg-red-100/50 hover:text-red-600 dark:hover:bg-red-900/40"
+                        onClick={toggleAssistant}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -3007,7 +2989,7 @@ function App() {
 export default function Root() {
   return (
     <ErrorBoundary>
-      <TooltipProvider>
+      <TooltipProvider delay={700} closeDelay={0}>
         <App />
       </TooltipProvider>
     </ErrorBoundary>
