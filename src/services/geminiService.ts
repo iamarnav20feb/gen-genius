@@ -46,14 +46,29 @@ export async function getExamHelpStream(
 ) {
   // ... (keep existing code for instructions)
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
-  const firstName = profile.name ? profile.name.split(' ')[0] : "";
-  
+  const getProfile = () => {
+    try {
+      return JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
+    } catch (e) {
+      return {};
+    }
+  };
+
+  const profileData = getProfile();
+  const firstName = profileData.name ? profileData.name.split(' ')[0] : "Student";
+
   const personaContext = firstName ? `USER NAME: ${firstName}\n` : "";
-  const personalityRule = firstName ? `Address the user by their first name (${firstName}) occasionally and naturally (e.g., at the start of a conversation or during encouragement). Do not over-use the name; mention it only when it feels impactful. Avoid using it in every response. ` : "";
-  const goalsContext = profile.bio ? `PERSONAL GOALS/CONTEXT: ${profile.bio}\n` : "";
+  const personalityRule = firstName ? `Address the user by their first name (${firstName}) occasionally and naturally (e.g., at the start of a conversation or during encouragement). Do not over-use the name; mention it only when it feels impactful. Avoid using it in every response. Use ONLY the first name, never the full name. ` : "";
+  const goalsContext = profileData.bio ? `PERSONAL GOALS/CONTEXT: ${profileData.bio}\n` : "";
   
   const subjectRule = subject ? `\n--- STRICT SUBJECT ISOLATION: ${subject} ---\n` : "";
+
+  const voiceModeRule = isVoiceMode ? `
+- VOICE MODE IS ACTIVE: Keep responses very brief, punchy, and conversational. 
+- Avoid long lists, tables, or complex markdown. 
+- Use short sentences that are easy to listen to.
+- Response must be under 30-40 words unless explicitly asked for a long explanation.
+- Speak naturally like a person on a phone call.` : "";
 
   const systemInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY – "GenGenius"
 TODAY: ${today}
@@ -80,7 +95,7 @@ BEHAVIOR STYLE:
 - Break complex topics into simple parts. Give exam-oriented explanations.
 - If user is lazy -> gently but firmly push them.
 - If user is confused -> explain calmly.
-- If user is doing well -> appreciate briefly.
+- If user is doing well -> appreciate briefly.${voiceModeRule}
 
 ---
 ${personalityRule}You are ${subject ? `a specialized tutor for ${subject}` : "an advanced AI assistant"}.
@@ -143,11 +158,19 @@ export async function getExamHelpStatic(
   subject?: string,
   files: { mimeType: string, data: string }[] = []
 ) {
-  const profile = JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
-  const firstName = profile.name ? profile.name.split(' ')[0] : "";
+  const getProfile = () => {
+    try {
+      return JSON.parse(localStorage.getItem("gen_genius_profile") || "{}");
+    } catch (e) {
+      return {};
+    }
+  };
+
+  const profileData = getProfile();
+  const firstName = profileData.name ? profileData.name.split(' ')[0] : "Student";
   const personaContext = firstName ? `User Name: ${firstName}. ` : "";
-  const personalityRule = firstName ? `Address the user by their first name (${firstName}) occasionally and naturally. Do not over-use it. ` : "";
-  const goalsContext = profile.bio ? `Context/Goals: ${profile.bio}. ` : "";
+  const personalityRule = firstName ? `Address the user by their first name (${firstName}) occasionally and naturally. Do not over-use it. Use ONLY the first name. ` : "";
+  const goalsContext = profileData.bio ? `Context/Goals: ${profileData.bio}. ` : "";
 
   const systemInstruction = `SYSTEM ROLE: GENIUS AI PERSONALITY – "GenGenius"
 IDENTITY: Female AI developed by Mr. Arnav.

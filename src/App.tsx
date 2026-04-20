@@ -420,8 +420,9 @@ const SidebarItem = memo(({
   setIsDeleteDialogOpen: (open: boolean) => void
 }) => (
   <Tooltip key={chat.id}>
-    <TooltipTrigger render={
+    <TooltipTrigger render={(props: any) => (
       <motion.div
+        {...props}
         variants={{
           hidden: { opacity: 0, x: -10 },
           visible: { opacity: 1, x: 0 }
@@ -434,7 +435,8 @@ const SidebarItem = memo(({
             : "text-foreground hover:bg-muted",
           isCollapsed && "justify-center h-9"
         )}
-        onClick={() => {
+        onClick={(e) => {
+          props.onClick?.(e);
           setActiveChatId(chat.id);
           setIsSidebarOpen(false);
         }}
@@ -466,7 +468,7 @@ const SidebarItem = memo(({
           </div>
         )}
       </motion.div>
-    } />
+    )} />
     {isCollapsed && <TooltipContent side="right">{chat.title}</TooltipContent>}
   </Tooltip>
 ));
@@ -555,26 +557,29 @@ const ChatInput = memo(({
             />
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger render={
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <TooltipTrigger render={(props: any) => (
+                  <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-12 w-12 rounded-xl hover:bg-muted text-foreground"
-                      onClick={() => document.getElementById('file-upload')?.click()}
+                      onClick={(e) => {
+                        props.onClick?.(e);
+                        document.getElementById('file-upload')?.click();
+                      }}
                     >
                       <Paperclip className="w-6 h-6" />
                     </Button>
                   </motion.div>
-                } />
+                )} />
                 <TooltipContent>Attach Files</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger render={
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <TooltipTrigger render={(props: any) => (
+                  <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -582,7 +587,8 @@ const ChatInput = memo(({
                         "h-12 w-12 rounded-xl hover:bg-muted transition-all",
                         isAssistantActive ? "text-primary bg-primary/10" : "text-foreground"
                       )}
-                      onClick={() => {
+                      onClick={(e) => {
+                        props.onClick?.(e);
                         if (isAssistantActive && isListening) {
                           recognitionRef.current?.stop();
                           setIsListening(false);
@@ -593,7 +599,7 @@ const ChatInput = memo(({
                       <Sparkles className={cn("w-6 h-6", isAssistantActive && "animate-pulse")} />
                     </Button>
                   </motion.div>
-                } />
+                )} />
                 <TooltipContent>{isAssistantActive ? "Exit GenGenius Assistant" : "Talk to GenGenius Assistant"}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -611,8 +617,8 @@ const ChatInput = memo(({
             <div className="absolute right-2 top-2 flex items-center gap-1">
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger render={
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <TooltipTrigger render={(props: any) => (
+                    <motion.div {...props} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -620,12 +626,15 @@ const ChatInput = memo(({
                           "h-12 w-12 rounded-xl hover:bg-muted transition-all",
                           isListening ? "text-red-500 bg-red-50 dark:bg-red-900/20" : "text-foreground"
                         )}
-                        onClick={toggleListening}
+                        onClick={(e) => {
+                          props.onClick?.(e);
+                          toggleListening();
+                        }}
                       >
                         {isListening ? <StopCircle className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
                       </Button>
                     </motion.div>
-                  } />
+                  )} />
                   <TooltipContent>{isListening ? "Stop Listening" : "Voice Input"}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -754,16 +763,20 @@ const SidebarContent = memo(({
                 </motion.div>
               ) : (
                 <Tooltip>
-                  <TooltipTrigger render={
+                  <TooltipTrigger render={(props: any) => (
                     <motion.div 
                       key="collapsed-logo"
+                      {...props}
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className="flex flex-col items-center space-y-4"
                     >
                       <div 
                         className="cursor-pointer"
-                        onClick={() => setIsSidebarCollapsed(false)}
+                        onClick={(e) => {
+                          props.onClick?.(e);
+                          setIsSidebarCollapsed(false);
+                        }}
                       >
                         <GenGeniusLogo collapsed />
                       </div>
@@ -771,12 +784,15 @@ const SidebarContent = memo(({
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 rounded-lg hover:bg-muted"
-                        onClick={() => setIsSidebarCollapsed(false)}
+                        onClick={(e) => {
+                          props.onClick?.(e);
+                          setIsSidebarCollapsed(false);
+                        }}
                       >
                         <PanelLeftOpen className="w-4 h-4 text-foreground/50" />
                       </Button>
                     </motion.div>
-                  } />
+                  )} />
                   <TooltipContent side="right">Expand Sidebar</TooltipContent>
                 </Tooltip>
               )}
@@ -801,8 +817,9 @@ const SidebarContent = memo(({
           <div className="space-y-1">
             {SUBJECTS.map((sub) => (
               <Tooltip key={sub.name}>
-                <TooltipTrigger render={
+                <TooltipTrigger render={(props: any) => (
                   <motion.div
+                    {...props}
                     variants={{
                       hidden: { opacity: 0, x: -10 },
                       visible: { opacity: 1, x: 0 }
@@ -820,7 +837,8 @@ const SidebarContent = memo(({
                           : "text-foreground",
                         isCollapsed && "px-0 justify-center"
                       )}
-                      onClick={() => {
+                      onClick={(e) => {
+                        props.onClick?.(e);
                         createNewChat(undefined, sub.name);
                         setIsSidebarOpen(false);
                       }}
@@ -844,7 +862,7 @@ const SidebarContent = memo(({
                       )}
                     </Button>
                   </motion.div>
-                } />
+                )} />
                 {isCollapsed && <TooltipContent side="right">{sub.name}</TooltipContent>}
               </Tooltip>
             ))}
@@ -870,45 +888,45 @@ const SidebarContent = memo(({
         {/* Sidebar Footer (Settings & Profile) */}
         <div className="p-4 mt-auto border-t border-border space-y-2">
           {!isCollapsed && <p className="text-[8px] text-center text-foreground/30 font-black uppercase tracking-[0.2em] mb-2">Developed by Mr. Arnav</p>}
-          {!user ? (
-            <div className="space-y-2">
-              {loginError && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="p-2 bg-destructive/10 border border-destructive/20 rounded-lg text-[10px] text-destructive font-medium leading-tight"
-                >
-                  {loginError}
-                </motion.div>
-              )}
-              <Button 
-                variant="outline" 
-                className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest border-border text-foreground", isCollapsed && "w-10 p-0 justify-center")}
-                onClick={handleGoogleLogin}
-                disabled={isLoggingIn}
-              >
-                {isLoggingIn ? (
-                  <Loader2 className={cn("w-4 h-4 animate-spin", !isCollapsed && "mr-2")} />
-                ) : (
-                  <LogIn className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
-                )}
-                {!isCollapsed && <span>{isLoggingIn ? "Signing in..." : "Login"}</span>}
-              </Button>
-            </div>
-          ) : (
-            <div className={cn("flex items-center gap-3 p-2 rounded-xl bg-muted border border-border", isCollapsed && "p-1 justify-center")}>
-              <Avatar className="w-8 h-8 rounded-lg">
-                <AvatarImage src={user.photoURL || ""} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">{user.displayName?.charAt(0) || "U"}</AvatarFallback>
-              </Avatar>
-              {!isCollapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold truncate text-foreground">{user.displayName}</p>
-                  <p className="text-[9px] text-foreground/70 truncate">{user.email}</p>
+              {!user ? (
+                <div className="space-y-2">
+                  {loginError && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-2 bg-destructive/10 border border-destructive/20 rounded-lg text-[10px] text-destructive font-medium leading-tight"
+                    >
+                      {loginError}
+                    </motion.div>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    className={cn("w-full justify-start h-10 rounded-xl text-xs font-bold uppercase tracking-widest border-border text-foreground", isCollapsed && "w-10 p-0 justify-center")}
+                    onClick={handleGoogleLogin}
+                    disabled={isLoggingIn}
+                  >
+                    {isLoggingIn ? (
+                      <Loader2 className={cn("w-4 h-4 animate-spin", !isCollapsed && "mr-2")} />
+                    ) : (
+                      <LogIn className={cn("w-4 h-4", !isCollapsed && "mr-2")} />
+                    )}
+                    {!isCollapsed && <span>{isLoggingIn ? "Signing in..." : "Login"}</span>}
+                  </Button>
+                </div>
+              ) : (
+                <div className={cn("flex items-center gap-3 p-2 rounded-xl bg-muted border border-border", isCollapsed && "p-1 justify-center")}>
+                  <Avatar className="w-8 h-8 rounded-lg">
+                    <AvatarImage src={user.photoURL || ""} />
+                    <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">{user.displayName?.charAt(0) || "U"}</AvatarFallback>
+                  </Avatar>
+                  {!isCollapsed && (
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold truncate text-foreground">{(user.displayName || "Student").split(' ')[0]}</p>
+                      <p className="text-[9px] text-foreground/70 truncate">{user.email}</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
           <Button 
             variant="ghost" 
@@ -1065,8 +1083,15 @@ const ActivationOverlay = ({
 function App() {
   const [user, setUser] = useState<FirebaseUser | null>(() => auth.currentUser);
   const [profile, setProfile] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem("gen_genius_profile");
-    return saved ? JSON.parse(saved) : { name: "", email: "", bio: "", photoURL: "" };
+    try {
+      const saved = localStorage.getItem("gen_genius_profile");
+      if (saved && saved !== "undefined") {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Failed to parse profile", e);
+    }
+    return { name: "", email: "", bio: "", photoURL: "" };
   });
 
   const [chats, setChats] = useState<Chat[]>(() => {
@@ -1130,6 +1155,9 @@ function App() {
   const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
   const [spokenWordIndex, setSpokenWordIndex] = useState(0);
   const [currentSpokenText, setCurrentSpokenText] = useState("");
+  const silenceTimerRef = useRef<any>(null);
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeechProcessingRef = useRef(false);
   
   const [hasApiKey, setHasApiKey] = useState(true);
   const [manualKey, setManualKey] = useState(() => localStorage.getItem("gen_genius_user_api_key") || "");
@@ -1206,17 +1234,26 @@ function App() {
         };
 
         recognitionRef.current.onresult = (event: any) => {
-          const result = event.results[event.results.length - 1]; // Use last result
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+          const result = event.results[event.results.length - 1];
           const transcript = result[0].transcript;
-          if (result.isFinal) { // Only process final results immediately
+
+          if (result.isFinal) {
             if (isAssistantActive) {
                 if (transcript.trim()) {
                   handleSend(transcript);
-                } else {
-                  speakText("I didn't catch that. Please repeat.", "error-repeat");
                 }
             } else {
                 setInput(prev => prev + (prev ? " " : "") + transcript);
+            }
+          } else {
+            // Manual Silence Detection for "Extremely Fast" reply
+            if (isAssistantActive && transcript.trim()) {
+              silenceTimerRef.current = setTimeout(() => {
+                recognitionRef.current?.stop();
+                handleSend(transcript);
+              }, 1000); // Trigger after 1s of silence even if not "final"
             }
           }
         };
@@ -1238,7 +1275,7 @@ function App() {
                   recognitionRef.current?.start();
                 } catch (e) {}
               }
-            }, 1000);
+            }, 300);
           }
         };
       } catch (e) {
@@ -1262,6 +1299,8 @@ function App() {
     window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
     return () => window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
   }, []);
+
+  const firstName = profile.name ? profile.name.split(' ')[0] : "Student";
 
   const toggleAssistant = () => {
     if (isAssistantActive) {
@@ -1291,20 +1330,22 @@ function App() {
     }
   }, [isListening]);
 
-  const speakText = useCallback(async (text: string, messageId: string) => {
+  const speakText = useCallback(async (text: string, messageId: string, shouldCancel = true) => {
     if (isSpeaking === messageId) {
       window.speechSynthesis.cancel();
       setIsSpeaking(null);
       return;
     }
 
-    window.speechSynthesis.cancel();
+    if (shouldCancel) {
+      window.speechSynthesis.cancel();
+    }
     const utterance = new SpeechSynthesisUtterance(text);
     
     // Set language
     utterance.lang = assistantLanguage;
     
-    // Voice selection: Prioritize mature male Indian voice
+    // Voice selection: Prioritize mature female Indian voice
     let voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) {
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -1312,48 +1353,55 @@ function App() {
     }
 
     const isFemale = (name: string) => 
-      /female|girl|woman|zira|veena|heera|samantha|victoria|google us english|monica|kalpana|sara|shana/i.test(name);
-    const isMale = (name: string) => 
-      /male|guy|rishi|prabhat/i.test(name);
-
-    // 1. Explicitly try for a Female Indian Voice (GenGenius identity)
+      /female|girl|woman|zira|veena|heera|samantha|victoria|google us english|monica|kalpana|sara|shana|hema/i.test(name);
+    
+    // 1. Explicitly try for a Female Indian Voice
     let selectedVoice = voices.find(v => 
       v.lang.startsWith(assistantLanguage) && 
       isFemale(v.name)
-    ) || 
-    // 2. Fallback: Any voice that is female
-    voices.find(v => isFemale(v.name)) ||
-    // 3. Fallback: Any voice for the language
-    voices.find(v => v.lang.startsWith(assistantLanguage)) ||
-    // 4. Last fallback: Default
-    voices[0];
+    ) || voices.find(v => isFemale(v.name)) || voices.find(v => v.lang.startsWith(assistantLanguage)) || voices[0];
     
     if (selectedVoice) utterance.voice = selectedVoice;
     
-    // Natural Female Tone: GenGenius warmth
-    utterance.pitch = 1.05; 
-    utterance.rate = 1.0;
+    // Optimized for Speed: Slightly faster rate, stable pitch
+    utterance.pitch = 1.0; 
+    utterance.rate = 1.1;
     
+    utterance.onstart = () => {
+      // Use requestAnimationFrame to ensure UI update is synced with start of audio
+      requestAnimationFrame(() => {
+        setCurrentSpokenText(cleanText);
+        setSpokenWordIndex(0);
+        setIsSpeaking(messageId);
+      });
+    };
+
     utterance.onend = () => {
-      setIsSpeaking(null);
-      // Restart listening after speaking if assistant is active
-      if (isAssistantActive && !isListening && !isLoading) {
-        setTimeout(() => {
-          if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
-            try {
-              recognitionRef.current?.start();
-            } catch (e) {}
-          }
-        }, 500);
+      // Only set to null if there are no more utterances queued
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        setIsSpeaking(null);
+        // Restart listening after speaking if assistant is active
+        if (isAssistantActive && !isListening && !isLoading) {
+          setTimeout(() => {
+            if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
+              try {
+                recognitionRef.current?.start();
+              } catch (e) {}
+            }
+          }, 400);
+        }
       }
     };
     utterance.onerror = () => setIsSpeaking(null);
     
-    // Clean markdown for better speech
-    const cleanText = text.replace(/[#*`_~\[\]()]/g, '').replace(/Related Topics:.*/i, '');
+    // Clean markdown for better speech and normalize spaces for accurate boundary detection
+    const cleanText = text
+      .replace(/[#*`_~\[\]()]/g, '')
+      .replace(/Related Topics:.*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
     utterance.text = cleanText;
-    setCurrentSpokenText(cleanText);
-    setSpokenWordIndex(0);
 
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
@@ -1363,7 +1411,6 @@ function App() {
       }
     };
     
-    setIsSpeaking(messageId);
     window.speechSynthesis.speak(utterance);
   }, [isSpeaking, assistantLanguage, isAssistantActive, isListening, isLoading]);
 
@@ -1772,6 +1819,11 @@ function App() {
     const finalPrompt = text.trim();
     if ((!finalPrompt && attachedFiles.length === 0) || isLoading) return;
 
+    if (isAssistantActive) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(null);
+    }
+
     // Clear input immediately to prevent double-sending
     setInput("");
     setAttachedFiles([]);
@@ -1874,17 +1926,37 @@ function App() {
       let fullResponse = "";
       
       console.log("GenGenius: Stream received, starting iteration...");
+      let spokenLength = 0;
+      let lastSpokenIndex = 0;
+
       try {
-        // According to @google/genai SDK, generateContentStream returns an async iterator directly
         for await (const chunk of stream) {
           if (controller.signal.aborted) break;
-          // In @google/genai, chunk.text is a getter property, not a method
           const chunkText = chunk.text;
           if (chunkText) {
-            console.log(`GenGenius: Received chunk (${chunkText.length} chars)`);
             fullResponse += chunkText;
             
-            // Only after we get the first chunk, we set the streaming message
+            // Speak chunks for Assistant Mode
+            if (isAssistantActive) {
+              const currentFull = fullResponse.replace(/Related Topics:.*/i, '').trim();
+              // Look for sentence terminators (. ! ? \n)
+              const terminators = /[.!?\n]/;
+              const matches = currentFull.substring(lastSpokenIndex).match(terminators);
+              
+              if (matches && matches.index !== undefined) {
+                const sentenceEnd = lastSpokenIndex + matches.index + 1;
+                const sentence = currentFull.substring(lastSpokenIndex, sentenceEnd).trim();
+                
+                if (sentence.length > 3) {
+                  // If it's the first chunk, speak immediately, else it will queue via browser logic
+                  // Note: window.speechSynthesis.speak queues utterances automatically
+                  speakText(sentence, aiMessageId + "_" + spokenLength, spokenLength === 0);
+                  spokenLength++;
+                  lastSpokenIndex = sentenceEnd;
+                }
+              }
+            }
+
             setStreamingMessage({
               id: aiMessageId,
               role: "model",
@@ -1893,6 +1965,14 @@ function App() {
               isTyping: true,
               status: "sending"
             });
+          }
+        }
+        
+        // Speak remaining text if any
+        if (isAssistantActive && lastSpokenIndex < fullResponse.replace(/Related Topics:.*/i, '').trim().length) {
+          const remaining = fullResponse.replace(/Related Topics:.*/i, '').trim().substring(lastSpokenIndex).trim();
+          if (remaining.length > 0) {
+            speakText(remaining, aiMessageId + "_final", spokenLength === 0);
           }
         }
       } catch (streamError) {
@@ -1972,10 +2052,7 @@ function App() {
         
         setStreamingMessage(null);
 
-        // Auto-speak if GenGenius Assistant is active
-        if (isAssistantActive) {
-          speakText(cleanResponse, aiMessageId);
-        }
+        // REMOVED Redundant call to speakText here as it's already handled incrementally
       }
     } catch (error: any) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -2390,11 +2467,11 @@ function App() {
         <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-background z-10">
           <div className="flex items-center space-x-4">
             <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-              <SheetTrigger render={
-                <Button variant="ghost" size="icon" className="md:hidden rounded-lg hover:bg-muted">
+              <SheetTrigger render={(props) => (
+                <Button {...props} variant="ghost" size="icon" className="md:hidden rounded-lg hover:bg-muted">
                   <Menu className="w-5 h-5 text-foreground" />
                 </Button>
-              } />
+              )} />
               <SheetContent side="left" className="p-0 w-72 border-r border-border shadow-2xl bg-background">
                 <SidebarContent 
                   isMobile 
@@ -2444,15 +2521,16 @@ function App() {
           <div className="flex items-center space-x-2">
             {activeChat && (
               <DropdownMenu>
-                <DropdownMenuTrigger render={
+                <DropdownMenuTrigger render={(props) => (
                   <Button
+                    {...props}
                     variant="ghost"
                     size="icon"
                     className="rounded-full w-8 h-8 hover:bg-muted"
                   >
                     <MoreVertical className="w-4 h-4 text-foreground" />
                   </Button>
-                } />
+                )} />
                 <DropdownMenuContent align="end" className="w-48 bg-background border-2 border-border rounded-xl p-1 shadow-xl">
                   <DropdownMenuGroup>
                     <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 px-2 py-1.5">
@@ -2630,7 +2708,7 @@ function App() {
                           className="max-w-2xl"
                         >
                           <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-2xl font-bold leading-tight">
-                            {currentSpokenText.split(/\s+/).map((word, i) => (
+                            {(currentSpokenText || "").split(/\s+/).map((word, i) => (
                               <motion.span
                                 key={`${word}-${i}`}
                                 initial={{ opacity: 0.3 }}
@@ -2654,7 +2732,7 @@ function App() {
                           className="space-y-4"
                         >
                           <p className="text-2xl font-medium text-foreground/70">
-                            {isListening ? "Listening to your request..." : "Ready to assist you, Arnav."}
+                            {isListening ? "Listening to your request..." : `Ready to assist you, ${firstName}.`}
                           </p>
                           <div className="flex items-center justify-center gap-2">
                             <Sparkles className="w-4 h-4 text-primary animate-pulse" />
@@ -2704,12 +2782,12 @@ function App() {
                       <div className="h-8 w-px bg-slate-300 dark:bg-white/10 mx-1" />
 
                       <DropdownMenu>
-                        <DropdownMenuTrigger render={
-                          <Button variant="ghost" className="h-14 rounded-full px-5 gap-2 text-foreground/60 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold">
+                        <DropdownMenuTrigger render={(props) => (
+                          <Button {...props} variant="ghost" className="h-14 rounded-full px-5 gap-2 text-foreground/60 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold">
                             <Languages className="w-4 h-4 text-primary" />
                             {assistantLanguage === "en-IN" ? "ENGLISH" : "HINDI"}
                           </Button>
-                        } />
+                        )} />
                         <DropdownMenuContent align="center" className="bg-popover border-border">
                           <DropdownMenuItem onClick={() => setAssistantLanguage("en-IN")}>English</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setAssistantLanguage("hi-IN")}>Hindi</DropdownMenuItem>

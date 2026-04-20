@@ -75,7 +75,7 @@ export default function SettingsDialog({
                   <AvatarFallback className="bg-primary text-primary-foreground text-xl font-bold">{profile.name?.charAt(0) || "U"}</AvatarFallback>
                 </Avatar>
                 <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-foreground">{user?.displayName || "Guest User"}</h3>
+                  <h3 className="text-sm font-bold text-foreground">{(user?.displayName || "Guest User").split(' ')[0]}</h3>
                   <p className="text-xs text-foreground font-medium">{user?.email || "Not logged in"}</p>
                 </div>
               </div>
