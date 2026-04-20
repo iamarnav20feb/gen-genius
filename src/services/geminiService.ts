@@ -20,16 +20,17 @@ const getAIClient = () => {
 // Using stable production models for maximum reliability.
 // Fallback logic is implemented to handle capacity issues (503 errors).
 const getModelName = (accuracyNeeded: boolean = false, retryCount: number = 0): string => {
-  // On first try, use the best available for the job
+  // Use recommended identifiers from gemini-api skill
+  // Flash Latest is the standard high-performance stable model
   if (retryCount === 0) {
-    return accuracyNeeded ? "gemini-1.5-pro" : "gemini-1.5-flash";
+    return accuracyNeeded ? "gemini-3.1-pro-preview" : "gemini-flash-latest";
   }
-  // On first retry, switch to standard Flash (high capacity)
+  // Try 3.1 Flash Lite if the primary is busy
   if (retryCount === 1) {
-    return "gemini-1.5-flash";
+    return "gemini-3.1-flash-lite-preview";
   }
-  // On second retry, use Flash-8B if available (lightweight/high throughput fallback)
-  return "gemini-1.5-flash-8b";
+  // Ultimate backup
+  return "gemini-3-flash-preview";
 };
 
 async function sleep(ms: number) {
