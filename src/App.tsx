@@ -2013,32 +2013,31 @@ function App() {
       if (error instanceof Error && error.name === 'AbortError') {
         console.log("Generation stopped by user");
       } else {
-        console.error("AI Generation Error:", error);
+        console.error("AI Generation Error Details:", error);
         
-        let errorContent = "I'm having trouble connecting to my brain right now. 🧠 Please check your connection and try again.";
+        let errorContent = "I'm having trouble connecting to my brain right now. 🧠 This usually happens when the AI is overloaded or there's a temporary glitch. Please try again in a few seconds!";
         
-        const errorString = typeof error === 'object' ? JSON.stringify(error) : String(error);
+        // Comprehensive string conversion for complex error objects
+        const errorString = String(error?.message || error?.statusText || JSON.stringify(error) || error);
         
-        if (error?.message === "MISSING_PERSONAL_KEY" || errorString.includes("MISSING_PERSONAL_KEY")) {
+        if (errorString.includes("MISSING_PERSONAL_KEY")) {
           setHasApiKey(false);
           setIsLoading(false);
-          
           errorContent = "⚠️ **GenGenius Access Required:** I couldn't find a valid AI access key. Please go to **Settings** (gear icon) and generate your **GenGenius Access Key** or provide your own Gemini API key to start learning.";
         } else if (
-          error?.status === "RESOURCE_EXHAUSTED" || 
-          error?.message?.includes("429") || 
-          error?.message?.includes("quota") ||
-          error?.message?.includes("RESOURCE_EXHAUSTED") ||
-          error?.status === 429 ||
-          errorString.includes("429") ||
+          errorString.includes("429") || 
+          errorString.includes("quota") ||
           errorString.includes("RESOURCE_EXHAUSTED") ||
-          errorString.includes("quota")
+          error?.status === "RESOURCE_EXHAUSTED" ||
+          error?.status === 429
         ) {
-          errorContent = "⚠️ **API Quota Exceeded:** I have reached my Google Gemini API limits. Please wait for the quota to reset, or check your billing and plan details at Google AI Studio.";
-        } else if (errorString.includes("API key")) {
-          errorContent = "⚠️ **API Key Error:** My connection to the AI is broken. Please ensure the API key is correctly set in the environment.";
-        } else if (error?.message?.includes("fetch") || error?.message?.includes("NetworkError") || error?.message?.includes("Failed to fetch")) {
-          errorContent = "⚠️ **Network Blocked:** I can't reach Google's AI servers. Since you are on a Chromebook, your school or network might be blocking 'generativelanguage.googleapis.com'. Try using a different Wi-Fi or a personal hotspot.";
+          errorContent = "⚠️ **API Quota Exceeded:** I have reached the Google Gemini API limits for today. Please wait for the quota to reset, or check your billing and plan details at Google AI Studio.";
+        } else if (errorString.includes("403") || errorString.includes("PERMISSION_DENIED") || errorString.includes("API key")) {
+          errorContent = "⚠️ **API Key / Permission Error:** My connection to the AI is blocked. This might be due to an invalid API key or restricted access. Please verify your API key in Settings.";
+        } else if (errorString.includes("fetch") || errorString.includes("Network") || errorString.includes("Failed to fetch") || errorString.includes("ERR_NETWORK")) {
+          errorContent = "⚠️ **Network Blocked:** I can't reach Google's AI servers. Since you are on a Chromebook, your school or network might be blocking 'generativelanguage.googleapis.com'. Try using a personal hotspot or another network.";
+        } else if (errorString.includes("400") || errorString.includes("INVALID_ARGUMENT")) {
+          errorContent = "⚠️ **Request Error (400):** The AI didn't like that request format. This might be due to complex file attachments or history issues. Try starting a New Session.";
         }
 
         const errorMessage: Message = {

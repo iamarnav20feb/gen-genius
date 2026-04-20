@@ -36,8 +36,8 @@ export async function getExamHelpStream(
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   
-  // Use gemini-3.1-flash-lite-preview for EXTREME speed and minimal latency
-  const modelName = "gemini-3.1-flash-lite-preview";
+  // Use gemini-3-flash-preview for maximum stability and speed
+  const modelName = "gemini-3-flash-preview";
   
   const subjectRule = subject ? `
 ---
@@ -91,8 +91,7 @@ End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
       contents,
       config: {
         systemInstruction,
-        temperature: 0.7,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+        temperature: 0.7
       },
     });
 
@@ -110,7 +109,7 @@ export async function getExamHelpStatic(
   files: { mimeType: string, data: string }[] = []
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const modelName = "gemini-3.1-flash-lite-preview";
+  const modelName = "gemini-3-flash-preview";
   
   const subjectRule = subject ? `--- CURRENT SUBJECT: ${subject} ---` : "";
 
@@ -133,8 +132,7 @@ export async function getExamHelpStatic(
       model: modelName,
       contents,
       config: {
-        systemInstruction,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+        systemInstruction
       }
     });
     return response.text;
