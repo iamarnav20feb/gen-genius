@@ -3,19 +3,15 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 const getAIClient = () => {
   if (typeof window === "undefined") return null;
 
-  // 1. Priority: User selected via AI Studio Build or exported site
-  let apiKey = process.env.API_KEY || "";
+  // 1. Priority: User's personal API key from local storage
+  let apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
   
-  // 2. Fallback: Check for string "undefined" or empty
-  if (!apiKey || apiKey === "undefined") {
-    apiKey = localStorage.getItem("gen_genius_user_api_key") || "";
-  }
-  
-  // 3. INTERNAL GENGENIUS SYSTEM: Fallback to owner key with internal quota
+  // 2. Fallback: Check if INTERNAL GENGENIUS SYSTEM is explicitly activated by this user
   if (!apiKey || apiKey === "undefined") {
     const internalActive = localStorage.getItem("gen_genius_internal_active");
     if (internalActive === "true") {
-      apiKey = process.env.GEMINI_API_KEY || "";
+      // Use the global environment keys ONLY IF internal access is unlocked
+      apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
     }
   }
     
