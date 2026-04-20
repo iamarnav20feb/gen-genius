@@ -2048,7 +2048,12 @@ function App() {
           error?.status === "RESOURCE_EXHAUSTED" ||
           error?.status === 429
         ) {
-          errorContent = "⚠️ **API Quota Exceeded:** I have reached the Google Gemini API limits for today. Please wait for the quota to reset, or check your billing and plan details at Google AI Studio.";
+          const isInternal = localStorage.getItem("gen_genius_internal_active") === "true";
+          if (isInternal) {
+            errorContent = "⚠️ **Global Server Traffic High:** While you still have GenGenius Daily Quota remaining, the underlying Google AI server is currently experiencing heavy global traffic. Please wait a minute and try again, or add your own Personal API Key in Settings to skip the line.";
+          } else {
+            errorContent = "⚠️ **Personal API Quota Exceeded:** You have reached the limits on your personal Google Gemini API key. Please check your billing and plan details at Google AI Studio.";
+          }
         } else if (errorString.includes("403") || errorString.includes("PERMISSION_DENIED") || errorString.includes("API key")) {
           errorContent = "⚠️ **API Key / Permission Error:** My connection to the AI is blocked. This might be due to an invalid API key or restricted access. Please verify your API key in Settings.";
         } else if (errorString.includes("fetch") || errorString.includes("Network") || errorString.includes("Failed to fetch") || errorString.includes("ERR_NETWORK")) {
