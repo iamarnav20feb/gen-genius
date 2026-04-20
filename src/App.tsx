@@ -1876,12 +1876,29 @@ function App() {
 
     try {
       const chatToUse = chatsRef.current.find(c => c.id === currentChatId);
-      // Limit history to the last 10 messages for extreme speed
-      const recentMessages = chatToUse ? chatToUse.messages.slice(-10) : [];
-      const history = recentMessages.map((m) => ({
-        role: m.role,
-        parts: [{ text: m.content }],
-      }));
+      
+      const rawHistory: any[] = [];
+      if (chatToUse) {
+        const validMsgs = chatToUse.messages.filter(m => m.status === "sent" && m.content);
+        
+        let expectedRole = "user";
+        for (const m of validMsgs) {
+          if (m.role === expectedRole) {
+            rawHistory.push({ role: m.role, parts: [{ text: m.content }] });
+            expectedRole = expectedRole === "user" ? "model" : "user";
+          } else if (m.role === "user" && expectedRole === "model") {
+             if (rawHistory.length > 0) {
+               rawHistory[rawHistory.length - 1].parts[0].text += "\n" + m.content;
+             }
+          }
+        }
+        
+        if (rawHistory.length > 0 && rawHistory[rawHistory.length - 1].role === "user") {
+          rawHistory.pop();
+        }
+      }
+      
+      const history = rawHistory.slice(-10);
 
       console.log("GenGenius: Calling AI stream...");
       const stream = await getExamHelpStream(
@@ -2129,13 +2146,16 @@ function App() {
   const handleRetry = () => {
     const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
     if (lastUserMessage) {
-      // Remove the last error message if it exists
+      // Remove the last error message and the last user message so handleSend can append it cleanly
       setChats(prev => prev.map(c => {
         if (c.id === activeChatId) {
-          return {
-            ...c,
-            messages: c.messages.filter(m => m.status !== "error")
-          };
+          const newMessages = c.messages.filter(m => m.status !== "error");
+          // Find the index of the last user message and remove it to prevent duplicates
+          const lastUserIdx = [...newMessages].reverse().findIndex(m => m.role === "user");
+          if (lastUserIdx !== -1) {
+            newMessages.splice(newMessages.length - 1 - lastUserIdx, 1);
+          }
+          return { ...c, messages: newMessages };
         }
         return c;
       }));
