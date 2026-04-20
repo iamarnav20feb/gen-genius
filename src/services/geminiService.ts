@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 const getAIClient = () => {
   if (typeof window === "undefined") return null;
@@ -36,8 +36,8 @@ export async function getExamHelpStream(
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   
-  // Use gemini-3-flash-preview for high speed and reliable performance
-  const modelName = "gemini-3-flash-preview";
+  // Use gemini-3.1-flash-lite-preview for EXTREME speed and minimal latency
+  const modelName = "gemini-3.1-flash-lite-preview";
   
   const subjectRule = subject ? `
 ---
@@ -92,6 +92,7 @@ End response with "Related Topics: topic1, topic2, topic3" on a new line.`;
       config: {
         systemInstruction,
         temperature: 0.7,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
       },
     });
 
@@ -109,7 +110,7 @@ export async function getExamHelpStatic(
   files: { mimeType: string, data: string }[] = []
 ) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const modelName = "gemini-3-flash-preview";
+  const modelName = "gemini-3.1-flash-lite-preview";
   
   const subjectRule = subject ? `--- CURRENT SUBJECT: ${subject} ---` : "";
 
@@ -133,6 +134,7 @@ export async function getExamHelpStatic(
       contents,
       config: {
         systemInstruction,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
       }
     });
     return response.text;

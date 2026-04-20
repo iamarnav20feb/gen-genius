@@ -1865,10 +1865,12 @@ function App() {
 
     try {
       const chatToUse = chatsRef.current.find(c => c.id === currentChatId);
-      const history = chatToUse ? chatToUse.messages.map((m) => ({
+      // Limit history to the last 10 messages for extreme speed
+      const recentMessages = chatToUse ? chatToUse.messages.slice(-10) : [];
+      const history = recentMessages.map((m) => ({
         role: m.role,
         parts: [{ text: m.content }],
-      })) : [];
+      }));
 
       console.log("GenGenius: Calling AI stream...");
       const stream = await getExamHelpStream(
