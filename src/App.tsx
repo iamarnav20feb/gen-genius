@@ -228,6 +228,7 @@ const SUBJECTS = [
   { name: "Science", icon: Atom, color: "text-cyan-500", bg: "bg-cyan-50" },
   { name: "Math", icon: Sigma, color: "text-rose-500", bg: "bg-rose-50" },
   { name: "Reasoning", icon: Puzzle, color: "text-indigo-500", bg: "bg-indigo-50" },
+  { name: "English", icon: BookOpen, color: "text-pink-500", bg: "bg-pink-50" },
   { name: "Computer", icon: Laptop, color: "text-slate-500", bg: "bg-slate-50" },
   { name: "Current Affairs", icon: Newspaper, color: "text-orange-500", bg: "bg-orange-50" },
 ];
@@ -1144,7 +1145,7 @@ function App() {
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAssistantActive, setIsAssistantActive] = useState(false);
-  const [assistantLanguage, setAssistantLanguage] = useState<"en-IN" | "hi-IN">("en-IN");
+  const assistantLanguage = "hi-IN"; // hi-IN natively handles both English and Hindi interchangeably
   const [spokenWordIndex, setSpokenWordIndex] = useState(0);
   const [currentSpokenText, setCurrentSpokenText] = useState("");
   const silenceTimerRef = useRef<any>(null);
@@ -1245,7 +1246,7 @@ function App() {
               silenceTimerRef.current = setTimeout(() => {
                 recognitionRef.current?.stop();
                 handleSend(transcript);
-              }, 1000); // Trigger after 1s of silence even if not "final"
+              }, 350); // Ultra-fast trigger after 350ms of silence
             }
           }
         };
@@ -1267,7 +1268,7 @@ function App() {
                   recognitionRef.current?.start();
                 } catch (e) {}
               }
-            }, 300);
+            }, 100);
           }
         };
       } catch (e) {
@@ -1337,27 +1338,35 @@ function App() {
     // Set language
     utterance.lang = assistantLanguage;
     
-    // Voice selection: Prioritize mature female Indian voice
+    // Voice selection: Force exactly one Indian woman voice mapping
     let voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) {
       await new Promise(resolve => setTimeout(resolve, 300));
       voices = window.speechSynthesis.getVoices();
     }
 
-    const isFemale = (name: string) => 
-      /female|girl|woman|zira|veena|heera|samantha|victoria|google us english|monica|kalpana|sara|shana|hema/i.test(name);
+    // Priorities:
+    // 1. "Google हिन्दी" which is universally a female Indian voice that speaks both Hindi and English flawlessly
+    // 2. Microsoft Swara or Neerja
+    // 3. Any fallback female hi-IN voice
+    const isTargetNativeVoice = (v: SpeechSynthesisVoice) => {
+      const name = v.name.toLowerCase();
+      return name.includes("google हिन्दी") || name.includes("google hindi") || name.includes("swara") || name.includes("neerja");
+    };
+
+    let selectedVoice = voices.find(isTargetNativeVoice) || 
+      voices.find(v => v.lang.startsWith("hi-IN") && /female|woman/i.test(v.name)) || 
+      voices.find(v => v.lang.startsWith("hi-IN"));
     
-    // 1. Explicitly try for a Female Indian Voice
-    let selectedVoice = voices.find(v => 
-      v.lang.startsWith(assistantLanguage) && 
-      isFemale(v.name)
-    ) || voices.find(v => isFemale(v.name)) || voices.find(v => v.lang.startsWith(assistantLanguage)) || voices[0];
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      // Also strictly set the lang to match the voice to avoid any weird OS accent bug
+      utterance.lang = selectedVoice.lang;
+    }
     
-    if (selectedVoice) utterance.voice = selectedVoice;
-    
-    // Optimized for Speed: Slightly faster rate, stable pitch
+    // Optimized for "very fast" talking speed while remaining clear
     utterance.pitch = 1.0; 
-    utterance.rate = 1.1;
+    utterance.rate = 1.25;
     
     utterance.onstart = () => {
       // Use requestAnimationFrame to ensure UI update is synced with start of audio
@@ -1380,7 +1389,7 @@ function App() {
                 recognitionRef.current?.start();
               } catch (e) {}
             }
-          }, 400);
+          }, 100);
         }
       }
     };
@@ -2613,14 +2622,15 @@ function App() {
           )} 
           ref={scrollRef}
         >
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             {isAssistantActive ? (
               <motion.div
                 key="assistant-view"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                className="relative h-full w-full flex flex-col items-center bg-[#fdfdfd] dark:bg-[#0a0a0f] overflow-hidden p-4 custom-scrollbar"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="absolute inset-0 z-20 h-full w-full flex flex-col items-center bg-[#fdfdfd] dark:bg-[#0a0a0f] overflow-hidden p-4 custom-scrollbar"
               >
                 {/* Clean, Non-Looped Background */}
                 <div className="absolute inset-0 pointer-events-none opacity-30">
@@ -2676,7 +2686,9 @@ function App() {
                           ) : isSpeaking ? (
                             <Volume2 className="w-12 h-12 text-primary animate-pulse" />
                           ) : (
-                            <BrainCircuit className="w-12 h-12 text-slate-400" />
+                            <div className="scale-125">
+                              <GenGeniusLogo collapsed={true} />
+                            </div>
                           )}
                         </motion.div>
                       </div>
@@ -2760,19 +2772,6 @@ function App() {
                         <StopCircle className="w-4 h-4" />
                       </Button>
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={(props) => (
-                          <Button {...props} variant="ghost" className="h-11 rounded-full px-3 gap-1.5 text-foreground/50 hover:bg-slate-200 dark:hover:bg-white/10 text-[8px] font-bold">
-                            <Languages className="w-3 h-3 text-primary" />
-                            {assistantLanguage === "en-IN" ? "EN" : "HI"}
-                          </Button>
-                        )} />
-                        <DropdownMenuContent align="center" className="bg-popover border-border">
-                          <DropdownMenuItem onClick={() => setAssistantLanguage("en-IN")}>English</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setAssistantLanguage("hi-IN")}>Hindi</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-
                       <div className="w-px h-5 bg-slate-300 dark:bg-white/10 mx-1" />
 
                       <Button
@@ -2793,7 +2792,8 @@ function App() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="max-w-2xl mx-auto space-y-6 pb-12"
+                transition={{ duration: 0.2 }}
+                className="max-w-2xl mx-auto space-y-6 pb-12 w-full"
               >
                 <div className="space-y-6 py-10">
                   {messages.length === 0 && (
