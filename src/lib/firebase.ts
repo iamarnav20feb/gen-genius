@@ -4,8 +4,6 @@ import { initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
 
-import { getAnalytics, isSupported } from "firebase/analytics";
-
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
@@ -23,21 +21,7 @@ export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Analytics is optional and might not work in all environments (like Chromebooks with restrictions)
 export let analytics: any = null;
-if (typeof window !== "undefined") {
-  isSupported().then((supported) => {
-    if (supported) {
-      try {
-        analytics = getAnalytics(app);
-      } catch (err) {
-        console.warn("Analytics initialization failed:", err);
-      }
-    }
-  }).catch(() => {
-    // Ignore isSupported errors
-  });
-}
 
 export const signInWithGoogle = async () => {
   try {
