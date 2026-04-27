@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { 
   Download, 
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { User as FirebaseUser } from "firebase/auth";
 import { cn } from "@/lib/utils";
+import { getDailyQuota } from "../services/geminiService";
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -56,6 +58,17 @@ export default function SettingsDialog({
   setManualKey,
   onSaveManualKey
 }: SettingsDialogProps) {
+  const [quotaInfo, setQuotaInfo] = useState({ count: 0, limit: 1500 });
+  useEffect(() => {
+    if (isOpen) {
+      setQuotaInfo(getDailyQuota());
+      const interval = setInterval(() => {
+        setQuotaInfo(getDailyQuota());
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isOpen]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] bg-background border-2 border-border p-0 overflow-hidden max-h-[90vh] flex flex-col">
@@ -94,14 +107,33 @@ export default function SettingsDialog({
                       </Label>
                       <div className="flex gap-2">
                         {localStorage.getItem("gen_genius_user_api_key") ? (
-                          <Input
-                            id="manualKey"
-                            type="text"
-                            value={localStorage.getItem("gen_genius_user_api_key") || ""}
-                            readOnly
-                            disabled
-                            className="bg-muted/50 border-2 border-border rounded-lg text-xs h-9 font-mono opacity-100 cursor-not-allowed select-all"
-                          />
+                          <div className="w-full space-y-4">
+                            <Input
+                              id="manualKey"
+                              type="text"
+                              value={localStorage.getItem("gen_genius_user_api_key") || ""}
+                              readOnly
+                              disabled
+                              className="bg-muted/50 border-2 border-border rounded-lg text-xs h-9 font-mono opacity-100 cursor-not-allowed select-all"
+                            />
+                            
+                            <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border/20">
+                              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex justify-between items-center">
+                                <span>Daily Request Quota</span>
+                                <span className="text-primary font-bold">{quotaInfo.limit - quotaInfo.count} Questions Left Today</span>
+                              </Label>
+                              <div className="h-3 w-full bg-border rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-primary transition-all duration-500 ease-out" 
+                                  style={{ width: `${Math.min(100, (quotaInfo.count / quotaInfo.limit) * 100)}%` }} 
+                                />
+                              </div>
+                              <div className="flex justify-between text-[10px] font-medium text-foreground/50">
+                                <span>{quotaInfo.count} generated</span>
+                                <span>1500 max (resets daily)</span>
+                              </div>
+                            </div>
+                          </div>
                         ) : (
                           <>
                             <Input

@@ -480,7 +480,7 @@ const ChatInput = memo(({
   onSend, 
   isLoading, 
   isAssistantActive, 
-  setIsAssistantActive, 
+  toggleAssistant, 
   isListening, 
   toggleListening,
   handleFileChange,
@@ -496,7 +496,7 @@ const ChatInput = memo(({
   onSend: (text: string) => void,
   isLoading: boolean,
   isAssistantActive: boolean,
-  setIsAssistantActive: (active: boolean) => void,
+  toggleAssistant: () => void,
   isListening: boolean,
   toggleListening: () => void,
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
@@ -591,7 +591,7 @@ const ChatInput = memo(({
                         recognitionRef.current?.stop();
                         setIsListening(false);
                       }
-                      setIsAssistantActive(!isAssistantActive);
+                      toggleAssistant();
                     }}
                   >
                     <Sparkles className={cn("w-6 h-6", isAssistantActive && "animate-pulse")} />
@@ -1145,7 +1145,7 @@ function App() {
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAssistantActive, setIsAssistantActive] = useState(false);
-  const assistantLanguage = "hi-IN"; // hi-IN natively handles both English and Hindi interchangeably
+  const assistantLanguage = "en-IN"; // English (Indian accent) as requested for subtitles
   const [spokenWordIndex, setSpokenWordIndex] = useState(0);
   const [currentSpokenText, setCurrentSpokenText] = useState("");
   const silenceTimerRef = useRef<any>(null);
@@ -1220,7 +1220,7 @@ function App() {
         recognitionRef.current = new SpeechRecognition();
         recognitionRef.current.continuous = true; // Changed to continuous for better handling
         recognitionRef.current.interimResults = true; // Catch voice faster
-        recognitionRef.current.lang = assistantLanguage;
+        recognitionRef.current.lang = "en-IN"; // Back to en-IN for English subtitles as requested
 
         recognitionRef.current.onstart = () => {
           setIsListening(true);
@@ -1229,25 +1229,47 @@ function App() {
         recognitionRef.current.onresult = (event: any) => {
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
-          const result = event.results[event.results.length - 1];
-          const transcript = result[0].transcript;
+          let newFinal = '';
+          let newInterim = '';
 
-          if (result.isFinal) {
-            if (isAssistantActive) {
-                if (transcript.trim()) {
-                  handleSend(transcript);
-                }
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              newFinal += event.results[i][0].transcript;
             } else {
-                setInput(prev => prev + (prev ? " " : "") + transcript);
+              newInterim += event.results[i][0].transcript;
             }
-          } else {
-            // Manual Silence Detection for "Extremely Fast" reply
-            if (isAssistantActive && transcript.trim()) {
-              silenceTimerRef.current = setTimeout(() => {
-                recognitionRef.current?.stop();
-                handleSend(transcript);
-              }, 350); // Ultra-fast trigger after 350ms of silence
-            }
+          }
+
+          const currentWords = newFinal || newInterim;
+
+          if (isAssistantActive && (window.speechSynthesis.speaking || isSpeaking)) {
+              // Only cancel if user says more than a few words (to avoid background noise interruption)
+              if (currentWords.trim().split(/\s+/).length > 2) {
+                  window.speechSynthesis.cancel();
+                  setIsSpeaking(null);
+              }
+          }
+
+          if (newFinal) {
+             setInput(prev => prev + (prev ? " " : "") + newFinal);
+          }
+          
+          setInterimResult(newInterim);
+
+          if (isAssistantActive && currentWords.trim()) {
+            silenceTimerRef.current = setTimeout(() => {
+              recognitionRef.current?.stop();
+              setInterimResult(prevInterim => {
+                setInput(currentInput => {
+                  const finalTranscript = currentInput.trim() + (prevInterim ? " " + prevInterim.trim() : "");
+                  if (finalTranscript) {
+                    setTimeout(() => handleSend(finalTranscript), 50);
+                  }
+                  return ""; // Clear input after auto-send
+                });
+                return ""; // Clear interim result
+              });
+            }, 900); // Super fast silence auto-send (0.9s)
           }
         };
 
@@ -1256,6 +1278,15 @@ function App() {
             console.error("Speech recognition error", event.error);
           }
           setIsListening(false);
+          
+          // Attempt restart on error if assistant active
+          if (isAssistantActive && !isSpeaking && !isLoading) {
+            setTimeout(() => {
+                if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
+                    try { recognitionRef.current?.start(); } catch(e) {}
+                }
+            }, 1000);
+          }
         };
 
         recognitionRef.current.onend = () => {
@@ -1279,7 +1310,7 @@ function App() {
 
   useEffect(() => {
     if (recognitionRef.current) {
-      recognitionRef.current.lang = assistantLanguage;
+      recognitionRef.current.lang = "en-IN";
     }
   }, [assistantLanguage]);
 
@@ -1303,25 +1334,15 @@ function App() {
       setIsSpeaking(null);
       recognitionRef.current?.stop();
       window.speechSynthesis.cancel();
+      setCurrentSpokenText("");
     } else {
       setIsAssistantActive(true);
-      // Listening will start via useEffect or manual trigger
+      const greeting = "Hello, GenGenius is ready. नमस्ते, मैं आपकी किस प्रकार सहायता कर सकती हूँ?";
+      speakText(greeting, "welcome_message", true);
     }
   };
 
-  const toggleListening = useCallback(() => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-    } else {
-      try {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(null);
-        recognitionRef.current?.start();
-      } catch (e) {
-        console.error("Failed to start speech recognition", e);
-      }
-    }
-  }, [isListening]);
+  const [interimResult, setInterimResult] = useState("");
 
   const speakText = useCallback(async (text: string, messageId: string, shouldCancel = true) => {
     if (isSpeaking === messageId) {
@@ -1364,9 +1385,9 @@ function App() {
       utterance.lang = selectedVoice.lang;
     }
     
-    // Optimized for "very fast" talking speed while remaining clear
-    utterance.pitch = 1.0; 
-    utterance.rate = 1.25;
+    // Optimized for "natural" talking speed while remaining clear
+    utterance.pitch = 1.05; 
+    utterance.rate = 0.95;
     
     utterance.onstart = () => {
       // Use requestAnimationFrame to ensure UI update is synced with start of audio
@@ -1374,26 +1395,33 @@ function App() {
         setCurrentSpokenText(cleanText);
         setSpokenWordIndex(0);
         setIsSpeaking(messageId);
+        setIsListening(false);
+        try { recognitionRef.current?.stop(); } catch(e) {}
       });
     };
 
     utterance.onend = () => {
-      // Only set to null if there are no more utterances queued
-      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-        setIsSpeaking(null);
-        // Restart listening after speaking if assistant is active
-        if (isAssistantActive && !isListening && !isLoading) {
-          setTimeout(() => {
-            if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
-              try {
-                recognitionRef.current?.start();
-              } catch (e) {}
+      // Small timeout to let browser state update
+      setTimeout(() => {
+          if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+            setIsSpeaking(null);
+            // Restart listening after speaking if assistant is active
+            if (isAssistantActive && !isListening && !isLoading) {
+              setTimeout(() => {
+                if (isAssistantActive && !isListening && !isSpeaking && !isLoading) {
+                  try {
+                    recognitionRef.current?.start();
+                  } catch (e) {}
+                }
+              }, 400); // 400ms buffer to ensure silence
             }
-          }, 100);
-        }
-      }
+          }
+      }, 50);
     };
-    utterance.onerror = () => setIsSpeaking(null);
+    utterance.onerror = (e) => {
+        console.error("SpeechSynthesis error:", e);
+        setIsSpeaking(null);
+    };
     
     // Clean markdown for better speech and normalize spaces for accurate boundary detection
     const cleanText = text
@@ -1414,6 +1442,22 @@ function App() {
     
     window.speechSynthesis.speak(utterance);
   }, [isSpeaking, assistantLanguage, isAssistantActive, isListening, isLoading]);
+
+  useEffect(() => {
+    if (isAssistantActive && !isLoading && !isListening && !isSpeaking && recognitionRef.current) {
+        const timer = setTimeout(() => {
+            if (isAssistantActive && !isLoading && !isListening && !isSpeaking) {
+                try {
+                    // Start listening if everything has been quiet for a solid 800ms
+                    recognitionRef.current.start();
+                } catch(e) {
+                    // Ignore already started errors
+                }
+            }
+        }, 800);
+        return () => clearTimeout(timer);
+    }
+  }, [isAssistantActive, isLoading, isListening, isSpeaking]);
 
   // Auth Listener and Firestore Sync
   useEffect(() => {
@@ -1939,23 +1983,31 @@ function App() {
             
             // Speak chunks for Assistant Mode
             if (isAssistantActive) {
-              const currentFull = fullResponse.replace(/Related Topics:.*/i, '').trim();
-              // Look for sentence terminators (. ! ? \n)
-              const terminators = /[.!?\n]/;
-              const matches = currentFull.substring(lastSpokenIndex).match(terminators);
-              
-              if (matches && matches.index !== undefined) {
-                const sentenceEnd = lastSpokenIndex + matches.index + 1;
-                const sentence = currentFull.substring(lastSpokenIndex, sentenceEnd).trim();
+                let currentFull = fullResponse.replace(/Related Topics:.*/i, '').trim();
+                // Match sentences but don't cut off too early
+                const terminators = /[.!?\n]/;
                 
-                if (sentence.length > 3) {
-                  // If it's the first chunk, speak immediately, else it will queue via browser logic
-                  // Note: window.speechSynthesis.speak queues utterances automatically
-                  speakText(sentence, aiMessageId + "_" + spokenLength, spokenLength === 0);
-                  spokenLength++;
-                  lastSpokenIndex = sentenceEnd;
+                while (true) {
+                    let textToSearch = currentFull.substring(lastSpokenIndex);
+                    let matches = textToSearch.match(terminators);
+                    
+                    if (matches && matches.index !== undefined) {
+                        const sentenceEnd = lastSpokenIndex + matches.index + 1;
+                        const sentence = currentFull.substring(lastSpokenIndex, sentenceEnd).trim();
+                        
+                        // Buffer sentences that are at least 15 characters long for natural flow
+                        if (sentence.length > 15 || (sentenceEnd === currentFull.length && sentence.length > 2)) {
+                            speakText(sentence, aiMessageId + "_" + spokenLength, spokenLength === 0 && !window.speechSynthesis.speaking);
+                            spokenLength++;
+                            lastSpokenIndex = sentenceEnd;
+                        } else {
+                            // If sentence is too short, wait for more content unless it's the end
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
                 }
-              }
             }
 
             setStreamingMessage({
@@ -1996,6 +2048,9 @@ function App() {
               isTyping: false,
               status: "sent"
             });
+            if (isAssistantActive && fullResponse.length > 0) {
+              speakText(fullResponse, aiMessageId + "_static", true);
+            }
           } else {
             throw new Error("No response from AI");
           }
@@ -2125,6 +2180,40 @@ function App() {
       setAbortController(null);
     }
   }, [input, attachedFiles, isLoading, activeChatId, activeChat, isAssistantActive, speakText, createNewChat]); // Removed chats dependency
+
+  const handleStopListening = useCallback((triggerSend = true) => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsListening(false);
+    
+    if (triggerSend) {
+      setInput(currentInput => {
+        const finalInput = currentInput.trim();
+        if (finalInput) {
+           setTimeout(() => handleSend(finalInput), 50);
+        }
+        return ""; // Clear input after sending
+      });
+      setInterimResult("");
+    }
+  }, [handleSend, setInput, setInterimResult]);
+
+  const toggleListening = useCallback(() => {
+    if (isListening) {
+      handleStopListening(true); // Send what was said when user manually stops
+    } else {
+      try {
+        window.speechSynthesis.cancel();
+        setIsSpeaking(null);
+        setInput(""); // Clear previous input before a fresh listening session string
+        setInterimResult("");
+        recognitionRef.current?.start();
+      } catch (e) {
+        console.error("Failed to start speech recognition", e);
+      }
+    }
+  }, [isListening, handleStopListening, setInput, setInterimResult, setIsSpeaking]);
 
   const restoreChat = (id: string) => {
     if (user) {
@@ -2731,7 +2820,7 @@ function App() {
                           className="space-y-1"
                         >
                           <p className="text-base font-medium text-foreground/60 tracking-tight">
-                            {isListening ? "Listening..." : `Ready for you, ${firstName}.`}
+                            {isListening ? ((input + (input && interimResult ? " " : "") + interimResult).trim() || "Listening...") : `Ready for you, ${firstName}.`}
                           </p>
                         </motion.div>
                       )}
@@ -2906,7 +2995,7 @@ function App() {
             onSend={handleSend}
             isLoading={isLoading}
             isAssistantActive={isAssistantActive}
-            setIsAssistantActive={setIsAssistantActive}
+            toggleAssistant={toggleAssistant}
             isListening={isListening}
             toggleListening={toggleListening}
             handleFileChange={handleFileChange}
